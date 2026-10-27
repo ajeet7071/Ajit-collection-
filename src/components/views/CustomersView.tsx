@@ -340,13 +340,14 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                 <th className="py-3 px-3 font-semibold">{t.customers.newspapers}</th>
                 <th className="py-3 px-3 text-right font-semibold">{t.customers.balance}</th>
                 <th className="py-3 px-3 text-center font-bold text-emerald-800">कलेक्शन (वसूली)</th>
-                <th className="py-3 px-3 text-center font-semibold">{t.customers.actions}</th>
+                <th className="py-3 px-3 text-center font-bold text-emerald-700">WhatsApp</th>
+                <th className="py-3 px-3 text-center font-semibold">विवरण (Eye 👁️)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                  <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
                     कोई ग्राहक नहीं मिला। नया ग्राहक जोड़ने के लिए ऊपर दिए बटन पर क्लिक करें।
                   </td>
                 </tr>
@@ -429,11 +430,12 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                         )}
                       </td>
 
-                      {/* Prominent Direct Collection Button */}
+                      {/* 1. Direct Collection Button (Outside in Table) */}
                       <td className="py-3 px-3 text-center">
                         <button
+                          type="button"
                           onClick={() => onDirectCollectPayment(cust)}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs whitespace-nowrap active:scale-95 ${
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs whitespace-nowrap active:scale-95 cursor-pointer ${
                             cust.currentBalance > 0
                               ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
                               : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
@@ -445,40 +447,31 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                         </button>
                       </td>
 
-                      <td className="py-3 px-3">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* View Full Details Button */}
-                          <button
-                            type="button"
-                            onClick={() => setDetailCustomer(cust)}
-                            className="p-1.5 text-blue-900 hover:text-blue-950 hover:bg-blue-50 rounded-lg transition"
-                            title="ग्राहक की फुल डिटेल देखें"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                      {/* 2. WhatsApp Reminder Button (Outside in Table) */}
+                      <td className="py-3 px-3 text-center">
+                        <a
+                          href={`https://wa.me/91${cust.mobile}?text=${encodeURIComponent(`नमस्ते ${cust.name} जी,\nअजीत कलेक्शन से आपका वर्तमान बकाया बिल बैलेंस ₹${cust.currentBalance} है।\nकृपया समय पर भुगतान करें। धन्यवाद!`)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition shadow-2xs whitespace-nowrap active:scale-95 cursor-pointer"
+                          title={`ग्राहक ${cust.name} को WhatsApp पर बकाया रिमाइंडर भेजें`}
+                        >
+                          <span className="text-emerald-600">💬</span>
+                          <span>WhatsApp</span>
+                        </a>
+                      </td>
 
-                          {/* Ledger Button */}
-                          <button
-                            onClick={() => onViewLedger(cust)}
-                            className="p-1.5 text-slate-600 hover:text-blue-900 hover:bg-blue-50 rounded-lg transition"
-                            title={t.customers.historyLedger}
-                          >
-                            <FileText className="w-4 h-4" />
-                          </button>
-
-
-
-                          {/* Delete Customer */}
-                          {onDeleteCustomer && (
-                            <button
-                              onClick={() => setCustomerToDelete(cust)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                              title={t.customers.delete}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
+                      {/* 3. Details Button (Opens Popup Window for remaining actions) */}
+                      <td className="py-3 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setDetailCustomer(cust)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition cursor-pointer shadow-2xs active:scale-95"
+                          title="ग्राहक की फुल डिटेल व अन्य ऐक्शन (लेजर, एडिट, डिलीट) देखें"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-blue-700" />
+                          <span>विवरण</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -879,6 +872,91 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                 </div>
               </div>
 
+              {/* Customer Actions Card inside Details Popup (Ledger, SMS, Edit, Delete, Call) */}
+              <div className="p-4 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50/70 via-slate-50 to-indigo-50/50 shadow-2xs space-y-3">
+                <div className="font-bold text-slate-900 text-xs flex items-center justify-between border-b border-blue-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">⚙️</span>
+                    <span className="text-blue-950 font-black">ग्राहक कार्य व विकल्प (Actions)</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-medium">खाता विवरण व संपादन</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {/* Action 1: Ledger */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cust = detailCustomer;
+                      setDetailCustomer(null);
+                      onViewLedger(cust);
+                    }}
+                    className="p-3 bg-blue-900 hover:bg-blue-800 active:scale-98 text-white rounded-xl flex flex-col items-center justify-center gap-1 shadow-xs transition cursor-pointer text-center"
+                    title="ग्राहक का खाता बही / लेजर इतिहास देखें"
+                  >
+                    <FileText className="w-5 h-5 text-blue-200" />
+                    <span className="font-bold text-xs">खाता बही (Ledger)</span>
+                    <span className="text-[9px] text-blue-200">लेनदेन व शेष राशि</span>
+                  </button>
+
+                  {/* Action 2: SMS */}
+                  <button
+                    type="button"
+                    onClick={() => handleSendCustomerSms(detailCustomer)}
+                    className="p-3 bg-indigo-50 hover:bg-indigo-100 active:scale-98 text-indigo-950 border border-indigo-200 rounded-xl flex flex-col items-center justify-center gap-1 shadow-2xs transition cursor-pointer text-center"
+                    title="डिफ़ॉल्ट मैसेजिंग ऐप से SMS भेजें"
+                  >
+                    <MessageSquare className="w-5 h-5 text-indigo-700" />
+                    <span className="font-bold text-xs">SMS भेजें</span>
+                    <span className="text-[9px] text-indigo-600">बकाया रिमाइंडर SMS</span>
+                  </button>
+
+                  {/* Action 3: Edit */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cust = detailCustomer;
+                      setDetailCustomer(null);
+                      handleOpenEdit(cust);
+                    }}
+                    className="p-3 bg-white hover:bg-slate-100 active:scale-98 text-slate-800 border border-slate-300 rounded-xl flex flex-col items-center justify-center gap-1 shadow-2xs transition cursor-pointer text-center"
+                    title="ग्राहक का विवरण, मोबाइल, रूट या अखबार एडिट करें"
+                  >
+                    <Edit3 className="w-5 h-5 text-blue-900" />
+                    <span className="font-bold text-xs">एडिट करें</span>
+                    <span className="text-[9px] text-slate-500">विवरण सुधारें</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-blue-100">
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`tel:${detailCustomer.mobile}`}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition"
+                      title="फोन कॉल करें"
+                    >
+                      <span>📞 कॉल करें (+91 {detailCustomer.mobile})</span>
+                    </a>
+                  </div>
+
+                  {onDeleteCustomer && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cust = detailCustomer;
+                        setDetailCustomer(null);
+                        setCustomerToDelete(cust);
+                      }}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                      title="इस ग्राहक को हटाएं"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                      <span>ग्राहक हटाएं</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Personal & Contact Details */}
               <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-3">
                 <div className="font-bold text-slate-900 text-xs flex items-center justify-between border-b border-slate-100 pb-2">
@@ -1119,20 +1197,8 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
             </div>
 
             {/* Modal Bottom Actions */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const cust = detailCustomer;
-                    setDetailCustomer(null);
-                    onDirectCollectPayment(cust);
-                  }}
-                  className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition cursor-pointer"
-                >
-                  <IndianRupee className="w-3.5 h-3.5" />
-                  <span>कलेक्शन ₹</span>
-                </button>
+            <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
 
                 <button
                   type="button"
@@ -1156,9 +1222,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                   <MessageSquare className="w-3.5 h-3.5 text-indigo-700" />
                   <span>SMS भेजें</span>
                 </button>
-              </div>
 
-              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -1171,6 +1235,24 @@ export const CustomersView: React.FC<CustomersViewProps> = ({
                   <Edit3 className="w-3.5 h-3.5 text-blue-900" />
                   <span>एडिट करें</span>
                 </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {onDeleteCustomer && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cust = detailCustomer;
+                      setDetailCustomer(null);
+                      setCustomerToDelete(cust);
+                    }}
+                    className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+                    title="ग्राहक हटाएं"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>डिलीट</span>
+                  </button>
+                )}
 
                 <button
                   type="button"

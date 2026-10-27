@@ -15,6 +15,7 @@ import { Invoice, Agency, Language } from '../../types';
 import { translations } from '../../i18n/translations';
 import { shareInvoicePdfOnWhatsApp, downloadInvoicePdf } from '../../services/pdfReceiptService';
 import { triggerSms, formatBillReminderSms } from '../../services/smsService';
+import { triggerPrintCustomerThermalBill } from '../../services/printService';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -53,10 +54,10 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
 
   const handlePrint = () => {
     if (printFormat === 'thermal') {
-      document.body.classList.add('thermal-print-active');
-    } else {
-      document.body.classList.remove('thermal-print-active');
+      triggerPrintCustomerThermalBill(invoice, agency);
+      return;
     }
+    document.body.classList.remove('thermal-print-active');
     document.body.classList.add('printing-modal-active');
 
     window.focus();
@@ -67,7 +68,6 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
         console.error('Print error:', err);
       } finally {
         setTimeout(() => {
-          document.body.classList.remove('thermal-print-active');
           document.body.classList.remove('printing-modal-active');
         }, 1000);
       }

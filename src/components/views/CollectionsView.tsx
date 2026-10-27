@@ -761,11 +761,11 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
       {/* WHATSAPP MESSAGE PREVIEW & DISPATCH MODAL                */}
       {/* ========================================================= */}
       {previewCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="relative w-[92vw] sm:w-full max-w-lg max-h-[85dvh] sm:max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
             
             {/* Header */}
-            <div className="bg-emerald-800 p-4 text-white flex items-center justify-between">
+            <div className="bg-emerald-800 p-4 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
                   <MessageSquare className="w-5 h-5 text-emerald-200" />
@@ -786,7 +786,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
             </div>
 
             {/* Content Body */}
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-4 sm:p-5 space-y-4 text-xs overflow-y-auto flex-1 overscroll-contain">
               
               {/* Highlight exact balance */}
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between">
@@ -812,7 +812,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-3 border-t border-slate-200 shrink-0">
                 <button
                   type="button"
                   onClick={handleCopyMessage}
@@ -842,10 +842,10 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
       {/* NEW PAYMENT RECEIPT MODAL                                 */}
       {/* ========================================================= */}
       {isNewReceiptOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="relative w-[92vw] sm:w-full max-w-md max-h-[85dvh] sm:max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
             
-            <div className="bg-emerald-800 p-4 text-white flex items-center justify-between">
+            <div className="bg-emerald-800 p-4 text-white flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-base font-bold">{t.collections.recordTitle}</h3>
                 <p className="text-xs text-emerald-200">रसीद काटें एवं खाता बही में तुरंत जमा करें</p>
@@ -858,7 +858,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
               </button>
             </div>
 
-            <div className="p-6 space-y-4 text-xs">
+            <div className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1 overscroll-contain">
               
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">{t.collections.selectCustomer} *</label>
@@ -960,7 +960,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsNewReceiptOpen(false)}
@@ -987,10 +987,10 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
       {/* CASH HANDOVER MODAL                                       */}
       {/* ========================================================= */}
       {isHandoverOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="relative w-[92vw] sm:w-full max-w-md max-h-[85dvh] sm:max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
             
-            <div className="bg-slate-900 p-4 text-white flex items-center justify-between">
+            <div className="bg-slate-900 p-4 text-white flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-base font-bold">{t.collections.cashHandover}</h3>
                 <p className="text-xs text-slate-400">दैनिक वसूली रोकड़ सत्यापन एवं सुपुर्दगी</p>
@@ -1003,7 +1003,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
               </button>
             </div>
 
-            <div className="p-6 space-y-4 text-xs">
+            <div className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1 overscroll-contain">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-slate-500">कलेक्शन एजेंट:</span>
@@ -1027,11 +1027,11 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                 मैनेजर / एजेंसी मालिक को रोकड़ सुपुर्द करते हुए भौतिक कैश एवं डिजिटल प्रविष्टियों का सत्यापन करें।
               </p>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsHandoverOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl font-medium text-slate-700"
+                  className="px-4 py-2 border border-slate-300 rounded-xl font-medium text-slate-700 hover:bg-slate-50 transition"
                 >
                   रद्द करें
                 </button>
@@ -1051,9 +1051,9 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
 
       {/* DELETE PAYMENT CONFIRMATION MODAL */}
       {paymentToDelete && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-2xl border border-rose-200 max-w-md w-full overflow-hidden animate-in fade-in duration-150">
-            <div className="bg-rose-700 p-4 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-rose-200 max-w-md w-[92vw] sm:w-full max-h-[85dvh] overflow-hidden my-auto flex flex-col animate-in fade-in duration-150">
+            <div className="bg-rose-700 p-4 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-rose-200" />
                 <h4 className="font-bold text-sm">भुगतान रसीद हटाएं (मानवीय भूल सुधार)</h4>
@@ -1067,7 +1067,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-4 sm:p-5 space-y-4 text-xs overflow-y-auto flex-1 overscroll-contain">
               <p className="text-slate-700 leading-relaxed">
                 क्या आप मानवीय भूल से कटी इस रसीद को सिस्टम एवं खाता बही से हटाना चाहते हैं?
               </p>
@@ -1098,7 +1098,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                 </p>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setPaymentToDelete(null)}

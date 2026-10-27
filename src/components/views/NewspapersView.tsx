@@ -229,10 +229,10 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
 
       {/* Edit / Add Newspaper Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="relative w-[92vw] sm:w-full max-w-md max-h-[85dvh] sm:max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
             
-            <div className="bg-blue-950 p-4 text-white flex items-center justify-between">
+            <div className="bg-blue-950 p-4 text-white flex items-center justify-between shrink-0">
               <h3 className="text-base font-bold">
                 {editingNp ? 'अखबार जानकारी एवं दरें संपादित करें' : 'नया समाचार पत्र जोड़ें'}
               </h3>
@@ -244,7 +244,7 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
               </button>
             </div>
 
-            <div className="p-6 space-y-3.5 text-xs">
+            <div className="p-4 sm:p-6 space-y-3.5 text-xs overflow-y-auto flex-1 overscroll-contain">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">अखबार का नाम (हिंदी) *</label>
                 <input
@@ -335,7 +335,7 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}

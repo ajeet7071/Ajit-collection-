@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { PaymentRecord, Agency } from '../types';
+import { PaymentRecord, Agency, Invoice } from '../types';
 
 /**
  * Builds HTML snippet for thermal POS receipt slip (80mm / 58mm mobile thermal printers)
@@ -301,3 +301,309 @@ export function triggerBluetoothThermalPrint(payment: PaymentRecord, agency: Age
   // Universal Fallback: System mobile print spooler
   triggerDirectPrintReceipt(payment, agency, 'thermal');
 }
+
+/**
+ * Builds HTML snippet for customer monthly bill formatted for thermal POS slip (58mm / 80mm)
+ * Uses .thermal-sheet styling defined in index.css
+ */
+export function buildCustomerBillThermalSnippet(invoice: Invoice, agency: Agency): string {
+  const upiPayable = Math.max(0, invoice.remainingBalance > 0 ? invoice.remainingBalance : invoice.totalPayable);
+  const upiId = agency.upiId || 'ajeet9660527071@upi';
+  const payeeName = agency.name || 'Ajit collection';
+  const note = `Bill-${invoice.invoiceNumber}-${invoice.customerName.slice(0, 10)}`;
+  const upiPaymentUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${upiPayable.toFixed(2)}&cu=INR&tn=${encodeURIComponent(note)}`;
+  const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=2&ecc=M&data=${encodeURIComponent(upiPaymentUri)}`;
+
+  const itemsHtml = invoice.items.map((item) => `
+    <tr style="border-bottom: 1px dotted #cccccc;">
+      <td style="padding: 2px 0; text-align: left; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">${item.newspaperName} (x${item.quantity})</td>
+      <td style="padding: 2px 0; text-align: center;">${item.daysBilled}</td>
+      <td style="padding: 2px 0; text-align: right;">₹${item.ratePerDay}</td>
+      <td style="padding: 2px 0; text-align: right; font-weight: bold;">₹${item.amount}</td>
+    </tr>
+  `).join('');
+
+  return `
+<div class="thermal-sheet" style="width: 76mm; max-width: 76mm; margin: 0 auto; padding: 2mm 1.5mm; font-family: 'JetBrains Mono', 'Noto Sans Devanagari', monospace; font-size: 8.5pt; line-height: 1.25; color: #000000; background: #ffffff;">
+  
+  <!-- Header Branding -->
+  <div style="text-align: center; margin-bottom: 4px;">
+    <div style="margin-bottom: 4px;">
+      <img 
+        src="/assets/aistudio/file_0000000043f482118d45f9a7391eadfe_4733c263.png" 
+        alt="Ajit collection" 
+        style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; display: inline-block; border: 1px solid #d97706;" 
+      />
+    </div>
+    <div style="font-size: 15px; font-weight: 900; margin-bottom: 1px; text-transform: uppercase;">
+      ${agency.nameHi || 'अजीत कलेक्शन'}
+    </div>
+    <div style="font-size: 11px; font-weight: 700; color: #1e293b; margin-bottom: 2px;">
+      ${agency.name || 'Ajit collection'}
+    </div>
+    <div style="font-size: 9.5px; color: #475569;">
+      ${agency.address}, ${agency.city}
+    </div>
+    <div style="font-size: 10px; font-weight: bold; margin-top: 2px;">
+      📞 संपर्क: +91 ${agency.mobile}
+    </div>
+  </div>
+
+  <div style="border-top: 2px solid #000000; margin: 5px 0 4px 0;"></div>
+  <div style="text-align: center; font-weight: 900; font-size: 11.5px; letter-spacing: 0.5px;">
+    मासिक बिल (MONTHLY BILL)
+  </div>
+  <div style="border-top: 1px dashed #000000; margin: 4px 0;"></div>
+
+  <!-- Bill Metadata -->
+  <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+    <span style="color: #333333;">बिल सं. (Bill No):</span>
+    <span style="font-weight: bold; font-family: monospace;">${invoice.invoiceNumber}</span>
+  </div>
+  <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+    <span style="color: #333333;">बिल माह (Month):</span>
+    <span style="font-weight: bold;">${invoice.billingMonth}</span>
+  </div>
+  <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+    <span style="color: #333333;">बिल दिनांक (Date):</span>
+    <span>${invoice.billDate}</span>
+  </div>
+  <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+    <span style="color: #333333;">अंतिम तिथि (Due):</span>
+    <span style="font-weight: bold;">${invoice.dueDate}</span>
+  </div>
+
+  <div style="border-top: 1px dashed #000000; margin: 4px 0;"></div>
+
+  <!-- Customer Details -->
+  <div style="margin-bottom: 2px;">
+    <span style="color: #333333;">ग्राहक नाम: </span>
+    <strong style="font-size: 11px;">${invoice.customerName}</strong>
+  </div>
+  <div style="margin-bottom: 2px;">
+    <span style="color: #333333;">मोबाइल: </span>
+    <span style="font-family: monospace; font-weight: 600;">+91 ${invoice.customerMobile}</span>
+  </div>
+  <div style="margin-bottom: 2px; font-size: 9.5px; color: #333333;">
+    <span>पता: </span>
+    <span>${invoice.customerAddress || 'स्थानीय वितरण'}</span>
+  </div>
+
+  <div style="border-top: 1px dashed #000000; margin: 4px 0;"></div>
+
+  <!-- Subscribed Newspapers Table -->
+  <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin: 4px 0;">
+    <thead>
+      <tr style="border-bottom: 1px solid #000000;">
+        <th style="text-align: left; padding-bottom: 2px;">अखबार</th>
+        <th style="text-align: center; padding-bottom: 2px;">दिन</th>
+        <th style="text-align: right; padding-bottom: 2px;">दर</th>
+        <th style="text-align: right; padding-bottom: 2px;">योग</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsHtml}
+    </tbody>
+  </table>
+
+  <div style="border-top: 1px dashed #000000; margin: 4px 0;"></div>
+
+  <!-- Accounting Breakdown -->
+  <div style="font-size: 9.5px; line-height: 1.35;">
+    <div style="display: flex; justify-content: space-between;">
+      <span>चालू बिल राशि (Current):</span>
+      <span>₹${invoice.subtotal}.00</span>
+    </div>
+    <div style="display: flex; justify-content: space-between;">
+      <span>पिछला बकाया (Prev Due):</span>
+      <span>₹${invoice.previousBalance}.00</span>
+    </div>
+    ${invoice.adjustments !== 0 ? `
+    <div style="display: flex; justify-content: space-between;">
+      <span>छूट / समायोजन:</span>
+      <span>-₹${Math.abs(invoice.adjustments)}.00</span>
+    </div>` : ''}
+  </div>
+
+  <!-- Big Total Due Box for Thermal Printer -->
+  <div style="border: 2px solid #000000; padding: 5px 4px; margin: 6px 0; text-align: center; background-color: #fafafa;">
+    <div style="font-size: 9.5px; font-weight: 700; text-transform: uppercase;">कुल देय राशि (TOTAL PAYABLE)</div>
+    <div style="font-size: 20px; font-weight: 900; font-family: monospace; margin: 2px 0;">
+      ₹${invoice.totalPayable}.00
+    </div>
+    ${invoice.amountPaid > 0 ? `
+    <div style="font-size: 9.5px; color: #166534; font-weight: bold;">
+      जमा राशि: ₹${invoice.amountPaid}.00 | शेष बकाया: ₹${invoice.remainingBalance}.00
+    </div>` : ''}
+  </div>
+
+  <!-- Thermal Slip Dynamic Payment QR Code -->
+  <div style="text-align: center; border: 1px dashed #000000; padding: 5px; margin: 6px 0; background: #ffffff;">
+    <div style="font-size: 9px; font-weight: 900; margin-bottom: 3px; text-transform: uppercase;">
+      PhonePe / Google Pay / Paytm QR
+    </div>
+    <div style="width: 100px; height: 100px; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+      <img
+        src="${qrCodeImageUrl}"
+        alt="UPI QR Code"
+        style="width: 96px; height: 96px; object-fit: contain;"
+      />
+    </div>
+    <div style="font-size: 9.5px; font-weight: 900; margin-top: 3px; font-family: monospace;">
+      देय राशि: ₹${upiPayable}.00
+    </div>
+    <div style="font-size: 8.5px; color: #333333; margin-top: 1px;">
+      UPI ID: ${upiId}
+    </div>
+    <div style="font-size: 8px; color: #555555; margin-top: 1px;">
+      स्कैन करके तुरंत ऑनलाइन भुगतान करें
+    </div>
+  </div>
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px; font-size: 9px;">
+    <div>
+      <div style="color: #555555;">अजीत कलेक्शन</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="color: #333333;">....................................</div>
+      <div style="font-weight: 600; margin-top: 2px;">वसूलीकर्ता / अधिकृत हस्ताक्षर</div>
+    </div>
+  </div>
+
+  <div style="border-top: 1px dashed #000000; margin: 6px 0 4px 0;"></div>
+  <div style="font-size: 8.5px; text-align: center; color: #444444; line-height: 1.3;">
+    🙏 अजीत कलेक्शन - आपका दिन शुभ हो!<br>
+    डिजिटल मासिक बिल · Ajit Collection App
+  </div>
+</div>
+  `.trim();
+}
+
+/**
+ * Builds Plain Text for Bluetooth ESC/POS thermal printers for customer monthly bill
+ */
+export function buildCustomerBillPlainText(invoice: Invoice, agency: Agency): string {
+  const upiPayable = Math.max(0, invoice.remainingBalance > 0 ? invoice.remainingBalance : invoice.totalPayable);
+  const upiId = agency.upiId || 'ajeet9660527071@upi';
+
+  const itemsText = invoice.items
+    .map((item) => `${item.newspaperName.padEnd(16, ' ').slice(0, 16)} ${String(item.daysBilled).padStart(3)}d  ₹${item.amount}`)
+    .join('\n');
+
+  return `
+================================
+  ${agency.nameHi || 'अजीत कलेक्शन'}
+  ${agency.name || 'Ajit collection'}
+  ${agency.address}, ${agency.city}
+  Phone: +91 ${agency.mobile}
+================================
+     मासिक बिल (MONTHLY BILL)
+--------------------------------
+बिल सं.   : ${invoice.invoiceNumber}
+बिल माह   : ${invoice.billingMonth}
+दिनांक    : ${invoice.billDate}
+अंतिम तिथि : ${invoice.dueDate}
+--------------------------------
+ग्राहक     : ${invoice.customerName}
+फोन       : +91 ${invoice.customerMobile}
+पता       : ${invoice.customerAddress || 'स्थानीय'}
+--------------------------------
+अखबार               दिन   योग
+${itemsText}
+--------------------------------
+चालू माह शुल्क : ₹${invoice.subtotal}.00
+पिछला बकाया    : ₹${invoice.previousBalance}.00
+${invoice.adjustments !== 0 ? `छूट/समायोजन   : -₹${Math.abs(invoice.adjustments)}.00\n` : ''}--------------------------------
+कुल देय राशि   : ₹${invoice.totalPayable}.00
+${invoice.amountPaid > 0 ? `जमा राशि      : ₹${invoice.amountPaid}.00\n` : ''}${invoice.remainingBalance > 0 ? `शेष बकाया     : ₹${invoice.remainingBalance}.00\n` : ''}--------------------------------
+UPI ID: ${upiId}
+देय राशि: ₹${upiPayable}.00
+हस्ताक्षर : .....................
+--------------------------------
+  🙏 अजीत कलेक्शन - शुभ दिन!
+================================
+`.trim();
+}
+
+/**
+ * Directly prints the customer's monthly bill using the thermal printer CSS styles
+ * currently defined in index.css (body.thermal-print-active, .thermal-sheet, body.direct-receipt-printing).
+ * 
+ * Injects into #direct-mobile-receipt-print-container and triggers window.print()
+ * with automatic cleanup. Compatible with mobile thermal printers (58mm/80mm),
+ * Android Print Spooler, Bluetooth print services, and desktop printers.
+ */
+export function triggerPrintCustomerThermalBill(invoice: Invoice, agency: Agency): void {
+  // 1. Get or create the dedicated mobile receipt print container
+  let container = document.getElementById('direct-mobile-receipt-print-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'direct-mobile-receipt-print-container';
+    document.body.appendChild(container);
+  }
+
+  // 2. Generate and mount the exact printable snippet using thermal sheet styles
+  const snippet = buildCustomerBillThermalSnippet(invoice, agency);
+  container.innerHTML = snippet;
+
+  // 3. Mark the body with thermal and direct receipt print classes defined in index.css
+  document.body.classList.add('direct-receipt-printing');
+  document.body.classList.add('thermal-print-active');
+
+  // 4. Trigger print synchronously within the user gesture context
+  try {
+    window.focus();
+    window.print();
+  } catch (err) {
+    console.warn('Thermal bill print execution notice:', err);
+  } finally {
+    // 5. Cleanup after print dialog interaction closes
+    const handleAfterPrint = () => {
+      document.body.classList.remove('direct-receipt-printing');
+      document.body.classList.remove('thermal-print-active');
+      if (container) {
+        container.innerHTML = '';
+      }
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+
+    window.addEventListener('afterprint', handleAfterPrint);
+
+    // Fallback safety timeout in case mobile browser doesn't dispatch afterprint event
+    setTimeout(handleAfterPrint, 2500);
+  }
+}
+
+/**
+ * Exported helper alias matching the user's requested specification:
+ * Helper function to trigger a printable version of a customer's monthly bill
+ * using the thermal printer CSS styles currently defined in index.css.
+ */
+export const printCustomerThermalBill = triggerPrintCustomerThermalBill;
+
+/**
+ * Triggers RawBT Bluetooth thermal printing on Android devices if RawBT is installed for customer bills.
+ * Falls back to standard direct thermal mobile print.
+ */
+export function triggerBluetoothCustomerThermalBill(invoice: Invoice, agency: Agency): void {
+  const plainText = buildCustomerBillPlainText(invoice, agency);
+
+  // Try RawBT Android intent
+  try {
+    const encoded = encodeURIComponent(plainText);
+    const rawBtUrl = `rawbt:data:text/plain;charset=utf-8,${encoded}`;
+    
+    // Check if on mobile device
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = rawBtUrl;
+      return;
+    }
+  } catch (e) {
+    console.warn('RawBT Bluetooth bill print trigger notice:', e);
+  }
+
+  // Universal Fallback: System mobile print spooler with thermal styles
+  triggerPrintCustomerThermalBill(invoice, agency);
+}
+

@@ -134,3 +134,153 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ========================================================================= */
+/* COMPACT MOBILE-FRIENDLY MODALS & INTERNAL VIEWPORT SCROLLING              */
+/* Ensures all modals (Invoice, Receipt, Edit, etc.) fit within the device   */
+/* screen without overflowing, keeping headers/footers pinned and scrolling  */
+/* content smoothly internally.                                             */
+/* ========================================================================= */
+@media screen {
+  /* Modal Overlay Backdrop: strictly bound to screen dimensions */
+  .fixed.inset-0.z-50,
+  .fixed.inset-0.z-60,
+  .modal-backdrop {
+    max-height: 100dvh !important;
+    max-width: 100vw !important;
+    padding: max(0.625rem, env(safe-area-inset-top, 0.625rem)) 
+             max(0.625rem, env(safe-area-inset-right, 0.625rem)) 
+             max(0.625rem, env(safe-area-inset-bottom, 0.625rem)) 
+             max(0.625rem, env(safe-area-inset-left, 0.625rem)) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overscroll-behavior: contain !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Modal Dialog Card: compact dimensions that never exceed mobile screen */
+  .fixed.inset-0.z-50 > div:not(.absolute):not(.fixed),
+  .fixed.inset-0.z-60 > div:not(.absolute):not(.fixed),
+  .modal-dialog {
+    max-height: calc(100dvh - 1.5rem) !important;
+    max-height: min(85dvh, calc(100vh - 1.5rem)) !important;
+    max-width: min(94vw, 42rem) !important;
+    width: 94vw !important;
+    margin: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    border-radius: 1rem !important;
+  }
+
+  @media (min-width: 640px) {
+    .fixed.inset-0.z-50 > div:not(.absolute):not(.fixed),
+    .fixed.inset-0.z-60 > div:not(.absolute):not(.fixed),
+    .modal-dialog {
+      max-height: 88vh !important;
+      width: 100% !important;
+    }
+  }
+
+  /* Modal Headers, Nav Bars, and Footers: always locked and visible */
+  .fixed.inset-0.z-50 > div > *:first-child,
+  .fixed.inset-0.z-60 > div > *:first-child,
+  .fixed.inset-0.z-50 > div > header,
+  .fixed.inset-0.z-60 > div > header,
+  .fixed.inset-0.z-50 > div > [class*="border-b"],
+  .fixed.inset-0.z-60 > div > [class*="border-b"],
+  .fixed.inset-0.z-50 > div > [class*="border-t"],
+  .fixed.inset-0.z-60 > div > [class*="border-t"],
+  .fixed.inset-0.z-50 > div > footer,
+  .fixed.inset-0.z-60 > div > footer,
+  .modal-header,
+  .modal-footer {
+    flex-shrink: 0 !important;
+  }
+
+  /* Modal Body Area: smoothly scrolls internally when exceeding viewport height */
+  .fixed.inset-0.z-50 > div > .overflow-y-auto,
+  .fixed.inset-0.z-60 > div > .overflow-y-auto,
+  .fixed.inset-0.z-50 > div > [class*="overflow-y-auto"],
+  .fixed.inset-0.z-60 > div > [class*="overflow-y-auto"],
+  .modal-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+  }
+
+  /* If modal contains an inner form, allow it to flex and scroll internally */
+  .fixed.inset-0.z-50 > div > form,
+  .fixed.inset-0.z-60 > div > form {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .fixed.inset-0.z-50 > div > form > div:not([class*="border-t"]):not([class*="bg-slate-50"]),
+  .fixed.inset-0.z-60 > div > form > div:not([class*="border-t"]):not([class*="bg-slate-50"]) {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+  }
+
+  .fixed.inset-0.z-50 > div > form > div[class*="border-t"],
+  .fixed.inset-0.z-60 > div > form > div[class*="border-t"],
+  .fixed.inset-0.z-50 > div > form > div[class*="bg-slate-50"],
+  .fixed.inset-0.z-60 > div > form > div[class*="bg-slate-50"] {
+    flex-shrink: 0 !important;
+  }
+
+  /* Nested confirmation overlays inside modals (e.g., delete confirmation inside invoice modal) */
+  .fixed.inset-0 .absolute.inset-0.z-50,
+  .fixed.inset-0 .absolute.inset-0.z-60 {
+    max-height: 100% !important;
+    max-width: 100% !important;
+    padding: 0.75rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+  }
+
+  .fixed.inset-0 .absolute.inset-0 > div {
+    max-height: min(80dvh, calc(100% - 1rem)) !important;
+    max-width: min(90vw, 24rem) !important;
+    width: 90vw !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Compact and elegant internal scrollbars for modal bodies */
+  .fixed.inset-0 .overflow-y-auto::-webkit-scrollbar,
+  .fixed.inset-0 [class*="overflow-y-auto"]::-webkit-scrollbar,
+  .modal-body::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .fixed.inset-0 .overflow-y-auto::-webkit-scrollbar-thumb,
+  .fixed.inset-0 [class*="overflow-y-auto"]::-webkit-scrollbar-thumb,
+  .modal-body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+
+  .fixed.inset-0 .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+  .fixed.inset-0 [class*="overflow-y-auto"]::-webkit-scrollbar-thumb:hover,
+  .modal-body::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+}
+
