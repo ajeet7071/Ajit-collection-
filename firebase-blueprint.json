@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and credentials for agency agent/owner",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "name": { "type": "string", "maxLength": 128 },
+        "mobile": { "type": "string", "maxLength": 20 },
+        "role": { "type": "string", "maxLength": 64 },
+        "agencyId": { "type": "string", "maxLength": 128 },
+        "isPhoneVerified": { "type": "boolean" },
+        "authProvider": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "mobile", "name"]
+    },
+    "AgencyBackup": {
+      "title": "AgencyBackup",
+      "description": "Full agency snapshot stored in Google Cloud Firestore for restore across devices",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 256 },
+        "agency": { "type": "object" },
+        "customers": { "type": "array" },
+        "newspapers": { "type": "array" },
+        "routes": { "type": "array" },
+        "invoices": { "type": "array" },
+        "payments": { "type": "array" },
+        "expenses": { "type": "array" },
+        "ledger": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "version": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["userId", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Agent user account profile details"
+    },
+    "/user_backups/{userId}": {
+      "schema": "AgencyBackup",
+      "description": "Complete agency data backup linked to Gmail/User account for recovery"
+    }
+  }
+}

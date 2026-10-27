@@ -1,0 +1,8 @@
+{
+  "name": "Ajeet Collection App - Newspaper Business Manager",
+  "description": "Complete Newspaper Business Billing, Daily Distribution, and Collection Management System with Mobile Number OTP Verification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

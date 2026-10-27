@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Allow test connection for Firebase skill validation
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Default deny-all catch
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // User profile: only the authenticated user can access and modify their profile
+    match /users/{userId} {
+      allow get, list, create, update, delete: if isOwner(userId);
+    }
+
+    // Cloud Data Backup: only the owner Gmail/User ID can back up and restore their agency database
+    match /user_backups/{userId} {
+      allow get, list, create, update, delete: if isOwner(userId);
+    }
+  }
+}

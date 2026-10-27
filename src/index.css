@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-hindi: 'Noto Sans Devanagari', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-latin: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  
+  html {
+    font-family: var(--font-latin);
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* Print styles for A4 and Thermal 58mm/80mm POS receipt printers */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .no-print,
+  nav,
+  footer,
+  aside {
+    display: none !important;
+  }
+
+  /* When printing from a modal dialog, isolate the printable sheet */
+  body.printing-modal-active main {
+    display: none !important;
+  }
+
+  body.printing-modal-active .fixed.inset-0 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  body.printing-modal-active .fixed.inset-0 > div {
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    border-radius: 0 !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  /* Default page setting for printing */
+  @page {
+    size: auto;
+    margin: 4mm;
+  }
+
+  /* When printing in thermal receipt printer mode (58mm / 80mm) */
+  body.thermal-print-active {
+    font-size: 8.5pt !important;
+    line-height: 1.2 !important;
+    font-family: 'JetBrains Mono', 'Noto Sans Devanagari', monospace !important;
+  }
+
+  body.thermal-print-active .thermal-sheet {
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 auto !important;
+    padding: 2mm !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Direct Mobile Receipt Print Container: Isolate completely for mobile thermal printing */
+  body.direct-receipt-printing > *:not(#direct-mobile-receipt-print-container) {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  body.direct-receipt-printing #direct-mobile-receipt-print-container {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    margin: 0 auto !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  body.direct-receipt-printing.thermal-print-active #direct-mobile-receipt-print-container {
+    width: 74mm !important;
+    max-width: 74mm !important;
+    padding: 1mm 2mm !important;
+    font-size: 8.5pt !important;
+    line-height: 1.25 !important;
+  }
+}
+
+@media screen {
+  .print-only,
+  #direct-mobile-receipt-print-container {
+    display: none !important;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

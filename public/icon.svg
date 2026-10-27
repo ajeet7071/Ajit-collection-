@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="50%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <g transform="translate(64, 64) scale(0.75)">
+    <!-- Newspaper shape -->
+    <rect x="40" y="40" width="432" height="340" rx="16" fill="#ffffff" stroke="#cbd5e1" stroke-width="8" />
+    <path d="M40 70 L472 70" stroke="#0284c7" stroke-width="12" stroke-linecap="round" />
+    <!-- Header title bar -->
+    <rect x="70" y="90" width="220" height="24" rx="4" fill="#1e293b" />
+    <rect x="310" y="90" width="130" height="12" rx="4" fill="#64748b" />
+    <rect x="310" y="106" width="90" height="8" rx="4" fill="#94a3b8" />
+    <!-- Columns -->
+    <rect x="70" y="134" width="170" height="90" rx="6" fill="#f1f5f9" />
+    <rect x="80" y="144" width="150" height="10" rx="2" fill="#3b82f6" />
+    <rect x="80" y="162" width="130" height="8" rx="2" fill="#94a3b8" />
+    <rect x="80" y="176" width="140" height="8" rx="2" fill="#94a3b8" />
+    <rect x="80" y="190" width="110" height="8" rx="2" fill="#94a3b8" />
+    <rect x="80" y="204" width="125" height="8" rx="2" fill="#94a3b8" />
+    
+    <rect x="260" y="134" width="180" height="8" rx="2" fill="#64748b" />
+    <rect x="260" y="150" width="180" height="8" rx="2" fill="#94a3b8" />
+    <rect x="260" y="166" width="160" height="8" rx="2" fill="#94a3b8" />
+    <rect x="260" y="182" width="175" height="8" rx="2" fill="#94a3b8" />
+    <rect x="260" y="198" width="150" height="8" rx="2" fill="#94a3b8" />
+    <rect x="260" y="214" width="165" height="8" rx="2" fill="#94a3b8" />
+    
+    <!-- Lower columns -->
+    <rect x="70" y="244" width="180" height="8" rx="2" fill="#94a3b8" />
+    <rect x="70" y="260" width="180" height="8" rx="2" fill="#94a3b8" />
+    <rect x="70" y="276" width="160" height="8" rx="2" fill="#94a3b8" />
+    <rect x="70" y="292" width="170" height="8" rx="2" fill="#94a3b8" />
+    <rect x="70" y="308" width="130" height="8" rx="2" fill="#94a3b8" />
+
+    <!-- Collection Coin / Rupee Badge in Lower Right -->
+    <circle cx="370" cy="310" r="85" fill="url(#goldGrad)" stroke="#ffffff" stroke-width="10" />
+    <!-- Rupee symbol -->
+    <path d="M345 270 L395 270 M345 285 L395 285 M345 270 L345 310 C365 310 385 305 385 290 C385 275 365 270 345 270 M360 305 L395 350" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
