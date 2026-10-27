@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   Wifi, 
   WifiOff, 
-  RefreshCw 
+  RefreshCw,
+  Settings
 } from 'lucide-react';
 import { UserProfile, Language } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -14,6 +15,7 @@ interface NavbarProps {
   onOpenAuth?: () => void;
   onOpenCloudBackup?: () => void;
   onOpenMore?: () => void;
+  onOpenSettings?: () => void;
   isOnline: boolean;
   pendingSyncCount: number;
   onSync: () => void;
@@ -22,12 +24,8 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentUser,
   lang,
-  onLanguageChange,
-  onOpenAuth,
-  onOpenCloudBackup,
-  onOpenMore,
+  onOpenSettings,
   isOnline,
   pendingSyncCount,
   onSync,
@@ -86,8 +84,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* Right Zone: Actions (Sync status & More Menu) */}
-          <div className="flex items-center gap-2.5 shrink-0 z-10 ml-auto">
+          {/* Right Zone: Actions (Sync status & Settings) */}
+          <div className="flex items-center gap-2 shrink-0 z-10 ml-auto">
             {/* Offline & Sync Indicator */}
             {isOnline ? (
               pendingSyncCount > 0 ? (
@@ -110,6 +108,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <WifiOff className="w-3.5 h-3.5" />
                 <span>Offline</span>
               </div>
+            )}
+
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="p-2 text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition cursor-pointer shadow-2xs"
+                title="एजेंसी सेटिंग्स व थीम (Settings & Theme)"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
             )}
           </div>
 

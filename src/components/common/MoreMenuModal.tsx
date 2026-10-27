@@ -15,7 +15,8 @@ import {
   Smartphone,
   Download,
   Lock,
-  Globe
+  Globe,
+  Palette
 } from 'lucide-react';
 import { Language, UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -26,8 +27,9 @@ interface MoreMenuModalProps {
   onSelectTab: (tab: string) => void;
   onOpenAuth: () => void;
   onOpenRouteManagement: () => void;
-  onOpenAgencyProfile: () => void;
+  onOpenAgencyProfile: (initialTab?: 'profile' | 'agency' | 'upi' | 'theme') => void;
   onOpenCloudBackup: () => void;
+  onLogoutToOtpPage?: () => void;
   currentUser: UserProfile;
   lang: Language;
   onLanguageChange: (lang: Language) => void;
@@ -41,6 +43,7 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
   onOpenRouteManagement,
   onOpenAgencyProfile,
   onOpenCloudBackup,
+  onLogoutToOtpPage,
   currentUser,
   lang,
   onLanguageChange,
@@ -51,12 +54,22 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
   const menuItems = [
     { 
       id: 'profile_manage', 
-      label: 'एजेंट एवं एजेंसी प्रोफाइल (Profile & UPI)', 
+      label: 'एजेंट एवं एजेंसी सेटिंग्स (Settings & UPI)', 
       icon: UserCog, 
       desc: 'मोबाइल नंबर, एजेंसी का नाम, यूपीआई कोड व प्रोफाइल विवरण बदलें',
       action: () => {
         onClose();
-        onOpenAgencyProfile();
+        onOpenAgencyProfile('profile');
+      }
+    },
+    { 
+      id: 'theme_manage', 
+      label: 'ऐप थीम व मुख्य रंग (Theme & Color Picker)', 
+      icon: Palette, 
+      desc: 'प्रीसेट थीम चुनें या कस्टम कलर पिकर से ऐप का रंग बदलें',
+      action: () => {
+        onClose();
+        onOpenAgencyProfile('theme');
       }
     },
     { 
@@ -199,16 +212,33 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
               </button>
             </div>
 
-            <button
-              onClick={() => {
-                onClose();
-                onOpenAuth();
-              }}
-              className="w-full p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs flex items-center justify-center gap-2 transition"
-            >
-              <Lock className="w-4 h-4 text-blue-900" />
-              <span>वेंडर स्थायी लॉगिन / खाता प्रवेश</span>
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenAuth();
+                }}
+                className="w-full p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <Lock className="w-4 h-4 text-blue-900" />
+                <span>वेंडर खाता सेटअप</span>
+              </button>
+
+              {onLogoutToOtpPage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onLogoutToOtpPage();
+                  }}
+                  className="w-full p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4 text-rose-600" />
+                  <span>ओटीपी लॉगिन पेज (Logout)</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

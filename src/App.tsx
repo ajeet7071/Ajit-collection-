@@ -30,6 +30,7 @@ import { CustomerPortalView } from './components/views/CustomerPortalView';
 import { ReportsView } from './components/views/ReportsView';
 import { QATestRunnerView } from './components/views/QATestRunnerView';
 import { SystemDocsView } from './components/views/SystemDocsView';
+import { OtpLoginPage } from './components/views/OtpLoginPage';
 
 import { storageService } from './services/storage';
 import { syncEngine } from './services/syncEngine';
@@ -57,6 +58,9 @@ import {
 } from './services/whatsappService';
 import { processCustomerPayment, revertCustomerPayment } from './services/paymentService';
 import { autoRunMonthEndBilling } from './services/billingEngine';
+import { applyPrimaryTheme } from './utils/themeEngine';
+import { backupReminderService } from './services/backupReminderService';
+import { Bell, Download, X } from 'lucide-react';
 
 export default function App() {
   // Localization: Hindi default
@@ -75,6 +79,9 @@ export default function App() {
   const [expenses, setExpenses] = useState(storageService.getExpenses());
   const [handovers, setHandovers] = useState(storageService.getHandovers());
   const [currentUser, setCurrentUser] = useState(storageService.getCurrentUser());
+  const [isOtpAuthenticated, setIsOtpAuthenticated] = useState<boolean>(() =>
+    storageService.isOtpSessionVerified()
+  );
 
   // Connectivity & Sync
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -95,6 +102,40 @@ export default function App() {
 
   // Agency & Agent Profile Modal state
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileModalInitialTab, setProfileModalInitialTab] = useState<'profile' | 'agency' | 'upi' | 'theme'>('profile');
+
+  // Apply customized primary color theme whenever agency.primaryColor changes
+  useEffect(() => {
+    applyPrimaryTheme(agency.primaryColor);
+  }, [agency.primaryColor]);
+
+  // 30-Day Scheduled Offline JSON Backup Reminder state
+  const [isBackupReminderVisible, setIsBackupReminderVisible] = useState<boolean>(() => {
+    return backupReminderService.getStatus().isDue;
+  });
+
+  useEffect(() => {
+    const checkReminder = () => {
+      const status = backupReminderService.getStatus();
+      if (status.isDue) {
+        setIsBackupReminderVisible(true);
+        backupReminderService.fireLocalBrowserNotification();
+      }
+    };
+
+    checkReminder();
+    const intervalId = window.setInterval(checkReminder, 1000 * 60 * 60); // Re-check hourly
+
+    const handleManualTrigger = () => {
+      setIsBackupReminderVisible(true);
+    };
+    window.addEventListener('ajeet:backup-reminder-triggered', handleManualTrigger);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('ajeet:backup-reminder-triggered', handleManualTrigger);
+    };
+  }, []);
 
   // Google Cloud Backup & Recovery Modal state
   const [isCloudBackupOpen, setIsCloudBackupOpen] = useState(false);
@@ -719,6 +760,29 @@ export default function App() {
     handleSaveCustomer(updated);
   };
 
+  if (!isOtpAuthenticated) {
+    return (
+      <OtpLoginPage
+        agency={agency}
+        currentUser={currentUser}
+        lang={lang}
+        onLoginVerified={(user, updatedAgency, restoredCloudData) => {
+          setCurrentUser(user);
+          storageService.saveCurrentUser(user);
+          if (updatedAgency) {
+            setAgency(updatedAgency);
+            storageService.saveAgency(updatedAgency);
+          }
+          if (restoredCloudData) {
+            handleRestoreCloudData(restoredCloudData);
+          }
+          storageService.setOtpSessionVerified(true);
+          setIsOtpAuthenticated(true);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       
@@ -730,12 +794,62 @@ export default function App() {
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenCloudBackup={() => setIsCloudBackupOpen(true)}
         onOpenMore={() => setIsMoreMenuOpen(true)}
+        onOpenSettings={() => {
+          setProfileModalInitialTab('theme');
+          setIsProfileModalOpen(true);
+        }}
         isOnline={isOnline}
         pendingSyncCount={pendingSyncCount}
         onSync={handleSync}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
+
+      {/* 30-Day Scheduled Offline JSON Backup Reminder Banner */}
+      {isBackupReminderVisible && (
+        <div className="bg-emerald-900 text-white px-4 py-2.5 shadow-md border-b border-emerald-700">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-emerald-800 text-emerald-200 shrink-0 mt-0.5 sm:mt-0">
+                <Bell className="w-4 h-4 animate-bounce" />
+              </div>
+              <div>
+                <span className="font-bold text-emerald-100 block sm:inline">
+                  🔒 30-दिवसीय सुरक्षा डेटा बैकअप रिमाइंडर:{' '}
+                </span>
+                <span className="text-emerald-50">
+                  आपके वर्तमान ऐप डेटा की सुरक्षा के लिए ऑफ़लाइन JSON बैकअप फ़ाइल डाउनलोड करने का समय हो गया है।
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  backupReminderService.downloadOfflineJsonBackup();
+                  setIsBackupReminderVisible(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-emerald-950 font-bold hover:bg-emerald-50 transition shadow-xs cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-700" />
+                <span>JSON बैकअप डाउनलोड करें</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  backupReminderService.snoozeReminder(1);
+                  setIsBackupReminderVisible(false);
+                }}
+                className="p-1.5 rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-800 transition cursor-pointer"
+                title="बाद में याद दिलाएं (Snooze)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main View Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-12">
@@ -963,8 +1077,15 @@ export default function App() {
         onSelectTab={setActiveTab}
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenRouteManagement={() => setIsRouteModalOpen(true)}
-        onOpenAgencyProfile={() => setIsProfileModalOpen(true)}
+        onOpenAgencyProfile={(tab = 'profile') => {
+          setProfileModalInitialTab(tab);
+          setIsProfileModalOpen(true);
+        }}
         onOpenCloudBackup={() => setIsCloudBackupOpen(true)}
+        onLogoutToOtpPage={() => {
+          storageService.setOtpSessionVerified(false);
+          setIsOtpAuthenticated(false);
+        }}
         currentUser={currentUser}
         lang={lang}
         onLanguageChange={setLang}
@@ -987,6 +1108,7 @@ export default function App() {
         currentUser={currentUser}
         onSaveProfile={handleSaveProfile}
         lang={lang}
+        initialTab={profileModalInitialTab}
       />
 
       <CloudBackupModal
@@ -997,6 +1119,7 @@ export default function App() {
         onOpenAuth={() => setIsAuthOpen(true)}
         onPerformBackup={handlePerformCloudBackup}
         onRestoreBackup={handleRestoreCloudData}
+        onUpdateProfile={handleSaveProfile}
         lang={lang}
       />
 

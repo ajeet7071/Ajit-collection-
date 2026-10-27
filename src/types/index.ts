@@ -40,6 +40,8 @@ export interface Agency {
   billingPolicy: 'calendar_days' | 'actual_delivery' | 'fixed_monthly';
   timezone: string;
   currency: string;
+  primaryColor?: string;
+  themePreset?: string;
 }
 
 export type CustomerType = 'residential' | 'commercial' | 'institution';

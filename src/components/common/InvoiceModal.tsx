@@ -171,14 +171,15 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
           </div>
         )}
 
-        {/* Top Action Bar (hidden in print) */}
-        <div className="no-print bg-slate-100 px-4 sm:px-5 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        {/* Top Header Bar (hidden in print) */}
+        <div className="no-print bg-slate-100 px-4 sm:px-5 py-2.5 border-b border-slate-200 flex items-center justify-between gap-2 shrink-0">
           
           {/* Format Selector Toggle */}
           <div className="inline-flex p-0.5 bg-slate-200 rounded-lg text-xs font-semibold">
             <button
+              type="button"
               onClick={() => setPrintFormat('thermal')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition cursor-pointer ${
                 printFormat === 'thermal'
                   ? 'bg-blue-900 text-white shadow-xs'
                   : 'text-slate-700 hover:text-slate-900'
@@ -188,8 +189,9 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
               <span>थर्मल (80mm)</span>
             </button>
             <button
+              type="button"
               onClick={() => setPrintFormat('a4')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition cursor-pointer ${
                 printFormat === 'a4'
                   ? 'bg-blue-900 text-white shadow-xs'
                   : 'text-slate-700 hover:text-slate-900'
@@ -200,74 +202,14 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* WhatsApp PDF Button */}
-            <button
-              type="button"
-              disabled={isSharingPdf}
-              onClick={handleSharePdfWhatsApp}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-98 rounded-lg transition shadow-xs cursor-pointer"
-              title="WhatsApp पर PDF बिल फाइल भेजें"
-            >
-              {isSharingPdf ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Share2 className="w-3.5 h-3.5 text-white" />
-              )}
-              <span>WhatsApp PDF</span>
-            </button>
-
-            {/* Default Device SMS Button */}
-            <button
-              type="button"
-              onClick={handleSendBillSms}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-indigo-900 bg-indigo-50 hover:bg-indigo-100 active:scale-98 border border-indigo-200 rounded-lg transition shadow-2xs cursor-pointer"
-              title="डिफ़ॉल्ट मैसेजिंग ऐप से SMS बिल भेजें"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-indigo-700" />
-              <span>SMS बिल</span>
-            </button>
-
-            {/* Direct PDF Download Button */}
-            <button
-              type="button"
-              onClick={handleDownloadPdf}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition shadow-2xs"
-              title="PDF बिल फाइल डाउनलोड करें"
-            >
-              <Download className="w-3.5 h-3.5 text-blue-900" />
-              <span className="hidden sm:inline">PDF</span>
-            </button>
-
-            {/* Print Button */}
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-900 hover:bg-blue-800 rounded-lg transition shadow-xs ring-1 ring-blue-700/50"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>{printFormat === 'thermal' ? 'प्रिंट रसीद' : 'प्रिंट A4'}</span>
-            </button>
-
-            {/* Delete Invoice Button */}
-            {onDeleteInvoice && (
-              <button
-                type="button"
-                onClick={() => setIsConfirmingDelete(true)}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 active:scale-98 border border-rose-200 rounded-lg transition shadow-2xs cursor-pointer"
-                title="इस बिल को डिलीट करें"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                <span>डिलीट</span>
-              </button>
-            )}
-
-            <button
-              onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition cursor-pointer"
+            title="बंद करें"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* PDF Toast Notification */}

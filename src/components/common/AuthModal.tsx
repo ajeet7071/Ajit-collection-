@@ -87,7 +87,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [otpCode, setOtpCode] = useState('');
   const [otpCountdown, setOtpCountdown] = useState(60);
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
-  const [simulatedOtpCode, setSimulatedOtpCode] = useState<string | null>(null);
 
   // Status & Error
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -146,9 +145,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Handle Google / Gmail Sign-In
   const handleGoogleSignIn = async () => {
     setErrorMsg('');
+    setSuccessMsg('');
     setIsGoogleLoading(true);
     try {
       const user = await firebaseService.loginWithGoogle();
+      if (!user) {
+        // User closed the popup window before completing sign-in
+        setErrorMsg(
+          lang === 'hi'
+            ? 'Google साइन-इन पॉप-अप विंडो बंद कर दी गई। आप दोबारा प्रयास कर सकते हैं या सीधे वेंडर पिन (1234) से लॉगिन करें।'
+            : 'Google Sign-In popup was closed. You can try again or log in directly with your Vendor PIN (1234).'
+        );
+        return;
+      }
+
       const userUid = user.uid;
       const userEmail = user.email || '';
       const userName = user.displayName || 'Authorized Agent';
@@ -172,12 +182,48 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setSuccessMsg(lang === 'hi' 
           ? `✓ Google खाता (${userEmail}) सफलतापूर्वक लिंक हुआ!` 
           : `✓ Google account (${userEmail}) linked successfully!`);
+
+        if (authMode === 'login') {
+          const loggedInUser: UserProfile = {
+            id: userUid,
+            name: userName || agency.ownerName || 'Ajeet Kumar',
+            email: userEmail,
+            mobile: vendorMobile || agency.mobile || '9660527071',
+            role: 'agency_owner',
+            agencyId: agency.id || 'agency_ajeet_01',
+            token: `tok_google_${Date.now()}`,
+            verifiedAt: new Date().toISOString(),
+            isPhoneVerified: true,
+            authProvider: 'google',
+          };
+          const updatedAgencyWithEmail: Agency = {
+            ...agency,
+            email: userEmail,
+          };
+          localStorage.setItem('ajeet_user_explicit_email_linked', 'true');
+          storageService.saveCurrentUser(loggedInUser);
+          storageService.saveAgency(updatedAgencyWithEmail);
+          setTimeout(() => {
+            onLoginSuccess(loggedInUser, updatedAgencyWithEmail);
+            onClose();
+          }, 500);
+        }
       }
     } catch (err: any) {
-      console.error('Google Sign-In failed:', err);
-      setErrorMsg(lang === 'hi' 
-        ? `Google साइन इन विफल: ${err.message || 'कृपया दोबारा प्रयास करें'}` 
-        : `Google Sign-in failed: ${err.message || 'Please try again'}`);
+      const code = err?.code || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setErrorMsg(
+          lang === 'hi'
+            ? 'Google साइन-इन पॉप-अप बंद कर दिया गया। कृपया दोबारा प्रयास करें या वेंडर पिन से लॉगिन करें।'
+            : 'Google Sign-In popup was closed.'
+        );
+      } else {
+        setErrorMsg(
+          lang === 'hi'
+            ? `Google साइन इन सूचना: ${err?.message || 'कृपया दोबारा प्रयास करें'}`
+            : `Google Sign-in notice: ${err?.message || 'Please try again'}`
+        );
+      }
     } finally {
       setIsGoogleLoading(false);
     }
@@ -221,45 +267,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setOtpStep('sending');
 
     try {
-      // Setup RecaptchaVerifier
-      const verifier = firebaseService.setupRecaptcha('recaptcha-container');
+      const verifier = firebaseService.setupRecaptcha('recaptcha-container', 'invisible');
       const formattedPhone = `+91${cleanMobile}`;
       
       const otpRes = await firebaseService.sendPhoneOtp(formattedPhone, verifier);
-      if (otpRes.success) {
-        if (otpRes.isFirebaseSms && otpRes.confirmationResult) {
-          setConfirmationResult(otpRes.confirmationResult);
-          setSimulatedOtpCode('');
-          setOtpStep('sent');
-          setOtpCountdown(60);
-          setSuccessMsg(lang === 'hi' 
-            ? `✓ Firebase OTP आपके मोबाइल नंबर +91 ${cleanMobile} पर SMS द्वारा भेजा गया है!` 
-            : `✓ Firebase OTP sent via SMS to +91 ${cleanMobile}!`);
-        } else {
-          const code = otpRes.demoOtpCode || Math.floor(100000 + Math.random() * 900000).toString();
-          setConfirmationResult(null);
-          setSimulatedOtpCode(code);
-          setOtpCode(code);
-          setOtpStep('sent');
-          setOtpCountdown(60);
-          setSuccessMsg(lang === 'hi' 
-            ? `✓ Firebase सुरक्षा OTP कोड: ${code} तैयार किया गया है (नीचे सत्यापित करें दबाएं)` 
-            : `✓ Firebase Security OTP Code: ${code}`);
-        }
+      if (otpRes.success && otpRes.confirmationResult) {
+        setConfirmationResult(otpRes.confirmationResult);
+        setOtpCode('');
+        setOtpStep('sent');
+        setOtpCountdown(60);
+        setSuccessMsg(lang === 'hi' 
+          ? `✓ Firebase OTP आपके मोबाइल नंबर +91 ${cleanMobile} पर SMS द्वारा भेजा गया है!` 
+          : `✓ Firebase OTP sent via SMS to +91 ${cleanMobile}!`);
       } else {
+        setConfirmationResult(null);
         setErrorMsg(otpRes.error || 'OTP भेजने में विफल');
         setOtpStep('idle');
       }
     } catch (err: any) {
-      const demoCode = Math.floor(100000 + Math.random() * 900000).toString();
       setConfirmationResult(null);
-      setSimulatedOtpCode(demoCode);
-      setOtpCode(demoCode);
-      setOtpStep('sent');
-      setOtpCountdown(60);
-      setSuccessMsg(lang === 'hi' 
-        ? `✓ Firebase OTP सुरक्षा कोड: ${demoCode}` 
-        : `✓ Firebase OTP security code: ${demoCode}`);
+      setErrorMsg(err?.message || 'OTP भेजने में त्रुटि हुई');
+      setOtpStep('idle');
     }
   };
 
@@ -270,23 +298,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    if (!confirmationResult) {
+      setErrorMsg(lang === 'hi' ? 'कृपया पहले मोबाइल पर SMS OTP मंगवाएं' : 'Please request SMS OTP first');
+      return;
+    }
+
     setErrorMsg('');
     setOtpStep('verifying');
 
     try {
-      if (confirmationResult && !simulatedOtpCode) {
-        // Real Firebase Confirmation
-        await confirmationResult.confirm(otpCode.trim());
-      } else if (simulatedOtpCode && otpCode.trim() !== simulatedOtpCode) {
-        throw new Error('अमान्य OTP कोड। कृपया सही कोड भरें।');
-      }
-
+      await confirmationResult.confirm(otpCode.trim());
       setOtpStep('verified');
       setSuccessMsg(lang === 'hi' 
         ? '✓ मोबाइल नंबर Firebase द्वारा सफलतापूर्वक सत्यापित हो गया!' 
         : '✓ Mobile number successfully verified via Firebase!');
     } catch (err: any) {
-      console.error('OTP verify error:', err);
       setErrorMsg(lang === 'hi' 
         ? `OTP सत्यापन विफल: ${err.message || 'अमान्य कोड'}` 
         : `OTP verification failed: ${err.message || 'Invalid code'}`);
@@ -413,17 +439,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         localStorage.setItem('ajeet_vendor_pin', vendorPin.trim());
       }
 
+      const hasExplicitEmail = localStorage.getItem('ajeet_user_explicit_email_linked') === 'true';
+      const existingLinkedEmail = hasExplicitEmail ? (currentUser.email || agency.email || '') : '';
+
       const vendorUser: UserProfile = {
         id: currentUser.id || 'usr_owner_01',
         name: agency.ownerName || 'Ajeet Kumar (Owner)',
         mobile: cleanMobile,
-        email: agency.email || 'ajeet9660527071@gmail.com',
+        email: existingLinkedEmail,
         role: 'agency_owner',
         agencyId: agency.id || 'agency_ajeet_01',
         token: `tok_vendor_perm_${Date.now()}`,
         verifiedAt: new Date().toISOString(),
         isPhoneVerified: true,
-        authProvider: 'phone',
+        authProvider: hasExplicitEmail ? currentUser.authProvider || 'phone' : 'phone',
       };
 
       storageService.saveCurrentUser(vendorUser);
@@ -476,8 +505,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
       <div className="relative w-[92vw] sm:w-full max-w-2xl max-h-[85dvh] sm:max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
         
-        {/* Invisible Recaptcha Container required for Firebase Phone Auth */}
-        <div id="recaptcha-container" ref={recaptchaContainerRef} className="hidden" />
+        {/* Recaptcha Container required for Firebase Phone Auth */}
+        <div id="recaptcha-container" ref={recaptchaContainerRef} className="flex justify-center" />
 
         {/* Modal Header */}
         <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 p-5 text-white flex items-center justify-between shrink-0">
@@ -739,28 +768,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </div>
                     )}
                   </div>
-
-                  {/* OTP Helper Code Display */}
-                  {simulatedOtpCode && otpStep !== 'verified' && (
-                    <div className="p-2.5 bg-blue-100/70 border border-blue-300 rounded-xl text-xs flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Lock className="w-4 h-4 text-blue-900 shrink-0" />
-                        <div>
-                          <span className="text-slate-700 font-medium">सत्यापन सुरक्षा कोड: </span>
-                          <span className="font-mono text-base font-black text-blue-950 tracking-wider bg-white px-2 py-0.5 rounded border border-blue-300 ml-1">
-                            {simulatedOtpCode}
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setOtpCode(simulatedOtpCode)}
-                        className="text-[11px] font-bold text-blue-900 bg-white hover:bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 transition"
-                      >
-                        ऑटो-भरें (Auto-Fill)
-                      </button>
-                    </div>
-                  )}
 
                   <p className="text-[10px] text-slate-500">
                     Google Firebase Authentication आपके फोन नंबर पर SMS OTP भेजकर वास्तविक सत्यापन करता है।

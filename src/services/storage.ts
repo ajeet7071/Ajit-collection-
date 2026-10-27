@@ -30,6 +30,7 @@ const STORAGE_KEYS = {
   MESSAGE_LOGS: 'ajeet_message_logs',
   AUTO_SYNC_ON_LAUNCH: 'ajeet_auto_sync_on_launch',
   DELETED_INVOICES: 'ajeet_deleted_invoices',
+  OTP_SESSION_VERIFIED: 'ajeet_otp_session_verified_v2',
 };
 
 export const defaultAgency: Agency = {
@@ -38,7 +39,7 @@ export const defaultAgency: Agency = {
   nameHi: 'अजीत कलेक्शन',
   ownerName: 'Ajeet Kumar Sharma',
   mobile: '9660527071',
-  email: 'ajeet9660527071@gmail.com',
+  email: '',
   address: 'Main Market Road, Near Clock Tower',
   city: 'Sri Ganganagar',
   state: 'Rajasthan',
@@ -406,6 +407,15 @@ export const storageService = {
       if (!parsed.name || parsed.name === 'Ajeet Newspaper Agency') {
         parsed.name = 'Ajit collection';
         parsed.nameHi = 'अजीत कलेक्शन';
+      }
+      const userRaw = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+      const userParsed = userRaw ? JSON.parse(userRaw) : null;
+      if (
+        (!userParsed || userParsed.authProvider !== 'google') &&
+        (parsed.email === 'lakshaycorporation@gmail.com' || parsed.email === 'ajeet9660527071@gmail.com') &&
+        !localStorage.getItem('ajeet_user_explicit_email_linked')
+      ) {
+        parsed.email = '';
         localStorage.setItem(STORAGE_KEYS.AGENCY, JSON.stringify(parsed));
       }
       return parsed;
@@ -483,14 +493,31 @@ export const storageService = {
 
   getCurrentUser(): UserProfile {
     const data = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    if (data) return JSON.parse(data);
+    if (data) {
+      try {
+        const parsed = JSON.parse(data);
+        if (
+          parsed.authProvider !== 'google' &&
+          (parsed.email === 'lakshaycorporation@gmail.com' || parsed.email === 'ajeet9660527071@gmail.com') &&
+          !localStorage.getItem('ajeet_user_explicit_email_linked')
+        ) {
+          parsed.email = '';
+          localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(parsed));
+        }
+        return parsed;
+      } catch {
+        // fallback below
+      }
+    }
     return {
       id: 'usr_owner_01',
       name: 'Ajeet Kumar (Agency Owner)',
       mobile: '9660527071',
+      email: '',
       role: 'agency_owner',
       agencyId: 'agency_ajeet_01',
       verifiedAt: new Date().toISOString(),
+      authProvider: 'phone',
     };
   },
   saveCurrentUser(user: UserProfile) {
@@ -540,6 +567,17 @@ export const storageService = {
     const existing = this.getDeletedInvoiceKeys();
     if (!existing.includes(key)) {
       this.saveDeletedInvoiceKeys([...existing, key]);
+    }
+  },
+
+  isOtpSessionVerified(): boolean {
+    return localStorage.getItem(STORAGE_KEYS.OTP_SESSION_VERIFIED) === 'true';
+  },
+  setOtpSessionVerified(verified: boolean) {
+    if (verified) {
+      localStorage.setItem(STORAGE_KEYS.OTP_SESSION_VERIFIED, 'true');
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.OTP_SESSION_VERIFIED);
     }
   },
 

@@ -14,10 +14,16 @@ import {
   Check, 
   ShieldCheck, 
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Palette,
+  Bell,
+  Download,
+  Clock
 } from 'lucide-react';
 import { Agency, UserProfile, UserRole, Language } from '../../types';
 import { generateUpiPaymentUrl } from '../../services/paymentService';
+import { THEME_PRESETS, DEFAULT_PRIMARY_COLOR, applyPrimaryTheme } from '../../utils/themeEngine';
+import { backupReminderService, BackupReminderStatus } from '../../services/backupReminderService';
 
 interface AgencyProfileModalProps {
   isOpen: boolean;
@@ -26,6 +32,7 @@ interface AgencyProfileModalProps {
   currentUser: UserProfile;
   onSaveProfile: (updatedAgency: Agency, updatedUser: UserProfile) => void;
   lang: Language;
+  initialTab?: 'profile' | 'agency' | 'upi' | 'theme';
 }
 
 export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
@@ -35,6 +42,7 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
   currentUser,
   onSaveProfile,
   lang,
+  initialTab = 'profile',
 }) => {
   // Form State initialized from agency and currentUser
   const [formData, setFormData] = useState({
@@ -56,12 +64,17 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
     agencyGstin: agency.gstin || '',
     agencyUpiId: agency.upiId || '',
     billingPolicy: agency.billingPolicy || 'calendar_days',
+    primaryColor: agency.primaryColor || DEFAULT_PRIMARY_COLOR,
+    themePreset: agency.themePreset || 'navy',
   });
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'agency' | 'upi'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'agency' | 'upi' | 'theme'>(initialTab);
   const [copiedLink, setCopiedLink] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [backupStatus, setBackupStatus] = useState<BackupReminderStatus>(() =>
+    backupReminderService.getStatus()
+  );
 
   // Re-sync when agency or currentUser prop changes or modal opens
   useEffect(() => {
@@ -82,11 +95,15 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
         agencyGstin: agency.gstin || '',
         agencyUpiId: agency.upiId || '',
         billingPolicy: agency.billingPolicy || 'calendar_days',
+        primaryColor: agency.primaryColor || DEFAULT_PRIMARY_COLOR,
+        themePreset: agency.themePreset || 'navy',
       });
+      setActiveTab(initialTab);
+      setBackupStatus(backupReminderService.getStatus());
       setErrorMessage('');
       setSuccessMessage('');
     }
-  }, [isOpen, agency, currentUser]);
+  }, [isOpen, agency, currentUser, initialTab]);
 
   if (!isOpen) return null;
 
@@ -110,6 +127,60 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
     }));
     if (errorMessage) setErrorMessage('');
     if (successMessage) setSuccessMessage('');
+  };
+
+  const handleSelectThemeColor = (hexColor: string, presetId: string = 'custom') => {
+    const normalized = hexColor.startsWith('#') ? hexColor : `#${hexColor}`;
+    setFormData(prev => ({
+      ...prev,
+      primaryColor: normalized,
+      themePreset: presetId,
+    }));
+    if (/^#[0-9A-Fa-f]{6}$/.test(normalized)) {
+      applyPrimaryTheme(normalized);
+      // Immediately persist theme change to agency storage so live selection stays applied
+      onSaveProfile(
+        {
+          ...agency,
+          primaryColor: normalized,
+          themePreset: presetId,
+        },
+        currentUser
+      );
+    }
+    if (errorMessage) setErrorMessage('');
+  };
+
+  const handleToggleBackupReminder = (enabled: boolean) => {
+    backupReminderService.saveSettings({ enabled });
+    setBackupStatus(backupReminderService.getStatus());
+    if (enabled) {
+      backupReminderService.requestNotificationPermission().then(() => {
+        setBackupStatus(backupReminderService.getStatus());
+      });
+    }
+    setSuccessMessage(
+      enabled
+        ? '✓ 30-दिवसीय ऑफ़लाइन JSON बैकअप रिमाइंडर चालू कर दिया गया है!'
+        : '30-दिवसीय ऑफ़लाइन बैकअप रिमाइंडर बंद कर दिया गया है।'
+    );
+  };
+
+  const handleDownloadJsonBackupNow = () => {
+    const result = backupReminderService.downloadOfflineJsonBackup();
+    setBackupStatus(backupReminderService.getStatus());
+    setSuccessMessage(
+      `✓ ऑफ़लाइन बैकअप फ़ाइल (${result.filename}) डाउनलोड हो गई! अगला रिमाइंडर 30 दिन बाद मिलेगा।`
+    );
+  };
+
+  const handleTestBackupNotification = async () => {
+    await backupReminderService.fireLocalBrowserNotification(
+      '🔒 Ajit collection - 30-दिवसीय बैकअप रिमाइंडर',
+      'सुरक्षा हेतु कृपया अपने ऐप के वर्तमान डेटा का ऑफ़लाइन JSON बैकअप डाउनलोड करें।'
+    );
+    setBackupStatus(backupReminderService.getStatus());
+    setSuccessMessage('✓ लोकल बैकअप रिमाइंडर नोटिफिकेशन भेजा गया!');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -136,13 +207,26 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
       return;
     }
 
+    const validPrimaryColor = /^#[0-9A-Fa-f]{6}$/.test(formData.primaryColor.trim())
+      ? formData.primaryColor.trim()
+      : DEFAULT_PRIMARY_COLOR;
+
+    applyPrimaryTheme(validPrimaryColor);
+
+    const cleanedEmail = formData.agencyEmail.trim().toLowerCase();
+    if (cleanedEmail) {
+      localStorage.setItem('ajeet_user_explicit_email_linked', 'true');
+    } else {
+      localStorage.removeItem('ajeet_user_explicit_email_linked');
+    }
+
     const updatedAgency: Agency = {
       ...agency,
       name: formData.agencyName.trim(),
       nameHi: formData.agencyNameHi.trim() || formData.agencyName.trim(),
       ownerName: formData.agentName.trim() || formData.agencyOwnerName.trim(),
       mobile: cleanMobile,
-      email: formData.agencyEmail.trim(),
+      email: cleanedEmail,
       address: formData.agencyAddress.trim(),
       city: formData.agencyCity.trim(),
       state: formData.agencyState.trim(),
@@ -150,19 +234,22 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
       gstin: formData.agencyGstin.trim(),
       upiId: formData.agencyUpiId.trim(),
       billingPolicy: formData.billingPolicy as any,
+      primaryColor: validPrimaryColor,
+      themePreset: formData.themePreset,
     };
 
     const updatedUser: UserProfile = {
       ...currentUser,
       name: formData.agentName.trim(),
       mobile: cleanMobile,
+      email: cleanedEmail,
       role: formData.agentRole,
     };
 
     onSaveProfile(updatedAgency, updatedUser);
     setSuccessMessage(lang === 'hi' 
-      ? '✓ एजेंट व एजेंसी प्रोफाइल और UPI कोड सफलतापूर्वक सहेज लिए गए!' 
-      : '✓ Agent & Agency Profile saved successfully!');
+      ? '✓ प्रोफाइल, UPI एवं ऐप थीम सेटिंग्स सफलतापूर्वक सहेज ली गईं!' 
+      : '✓ Agent Profile, UPI & Theme Settings saved successfully!');
 
     setTimeout(() => {
       onClose();
@@ -174,80 +261,93 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
       <div className="relative w-[92vw] sm:w-full max-w-2xl max-h-[85dvh] sm:max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 p-5 text-white flex items-center justify-between shrink-0">
+        <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 p-4 sm:p-5 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-xs border border-white/20">
               <User className="w-5 h-5 text-blue-200" />
             </div>
             <div>
               <h3 className="font-bold text-base sm:text-lg">
-                एजेंट एवं एजेंसी प्रोफाइल (Edit Agent Profile & UPI)
+                एजेंसी प्रोफाइल एवं ऐप सेटिंग्स (Settings & Theme)
               </h3>
               <p className="text-xs text-blue-200">
-                साइन अप विवरण, मोबाइल नंबर, एजेंसी नाम व UPI कोड एडिट करें
+                प्रोफाइल विवरण, मोबाइल नंबर, UPI कोड व ऐप का रंग (Theme) बदलें
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-white/10 transition"
+            className="p-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-white/10 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 bg-slate-50 shrink-0 text-xs font-semibold">
+        <div className="flex border-b border-slate-200 bg-slate-50 shrink-0 text-xs font-semibold overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-3 px-2 text-center flex items-center justify-center gap-1.5 border-b-2 transition ${
+            className={`flex-1 py-2.5 px-2 text-center flex items-center justify-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
               activeTab === 'profile'
-                ? 'border-blue-900 text-blue-900 bg-white'
+                ? 'border-blue-900 text-blue-900 bg-white font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <User className="w-4 h-4" />
-            <span>एजेंट प्रोफाइल (Agent)</span>
+            <User className="w-3.5 h-3.5 shrink-0" />
+            <span>प्रोफाइल</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('agency')}
-            className={`flex-1 py-3 px-2 text-center flex items-center justify-center gap-1.5 border-b-2 transition ${
+            className={`flex-1 py-2.5 px-2 text-center flex items-center justify-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
               activeTab === 'agency'
-                ? 'border-blue-900 text-blue-900 bg-white'
+                ? 'border-blue-900 text-blue-900 bg-white font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Building2 className="w-4 h-4" />
-            <span>एजेंसी व पता (Agency)</span>
+            <Building2 className="w-3.5 h-3.5 shrink-0" />
+            <span>एजेंसी व पता</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('upi')}
-            className={`flex-1 py-3 px-2 text-center flex items-center justify-center gap-1.5 border-b-2 transition ${
+            className={`flex-1 py-2.5 px-2 text-center flex items-center justify-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
               activeTab === 'upi'
-                ? 'border-blue-900 text-blue-900 bg-white'
+                ? 'border-blue-900 text-blue-900 bg-white font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <QrCode className="w-4 h-4" />
-            <span>UPI कोड व बिलिंग (UPI & QR)</span>
+            <QrCode className="w-3.5 h-3.5 shrink-0" />
+            <span>UPI व बिलिंग</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('theme')}
+            className={`flex-1 py-2.5 px-2 text-center flex items-center justify-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
+              activeTab === 'theme'
+                ? 'border-blue-900 text-blue-900 bg-white font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5 shrink-0" />
+            <span>थीम व रंग (Theme)</span>
           </button>
         </div>
 
         {/* Alerts */}
         {errorMessage && (
-          <div className="mx-5 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-2">
+          <div className="mx-5 mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-2 shrink-0">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="mx-5 mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
+          <div className="mx-5 mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2 shrink-0">
             <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
             <span>{successMessage}</span>
           </div>
@@ -259,11 +359,21 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
           {/* TAB 1: Agent & User Profile */}
           {activeTab === 'profile' && (
             <div className="space-y-4">
-              <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-100 flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-blue-800 shrink-0 mt-0.5" />
-                <div className="text-xs text-blue-900">
-                  यह वह प्रोफाइल जानकारी है जो आपने साइन अप करते समय दी थी। इसे अपडेट करने पर आपके सभी चालान, रसीद व बिल पर यही नाम व संपर्क नंबर दिखाई देगा।
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex items-center justify-between gap-2.5">
+                <div className="flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 text-blue-800 shrink-0 mt-0.5" />
+                  <div className="text-xs text-blue-900">
+                    चालान, रसीद व बिल पर यही नाम व संपर्क नंबर दिखाई देगा।
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('theme')}
+                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-900 text-white text-[11px] font-bold shadow-2xs hover:bg-blue-800 transition cursor-pointer"
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>रंग बदलें</span>
+                </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -542,6 +652,212 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
             </div>
           )}
 
+          {/* TAB 4: Theme & Primary Color Customization */}
+          {activeTab === 'theme' && (
+            <div className="space-y-4">
+              <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-200 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <Palette className="w-4 h-4 text-blue-900 shrink-0 mt-0.5" />
+                  <div className="text-xs text-slate-800 space-y-0.5">
+                    <div className="font-bold text-blue-950">
+                      ऐप का मुख्य रंग व थीम कस्टमाइज करें (Primary Theme Color)
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      नीचे दिए गए प्रीसेट रंगों में से चुनें या कस्टम कलर पिकर से अपनी पसंद का कोई भी रंग चुनें।
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSelectThemeColor(DEFAULT_PRIMARY_COLOR, 'navy')}
+                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-semibold transition cursor-pointer shadow-2xs"
+                  title="डिफ़ॉल्ट रॉयल नेवी रंग पर रीसेट करें"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>डिफ़ॉल्ट रंग</span>
+                </button>
+              </div>
+
+              {/* Preset Theme Selector Grid */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  1. प्रीसेट थीम चुनें (Preset Themes)
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {THEME_PRESETS.map((preset) => {
+                    const isSelected =
+                      formData.primaryColor.toLowerCase() === preset.primaryHex.toLowerCase();
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleSelectThemeColor(preset.primaryHex, preset.id)}
+                        className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-2 cursor-pointer relative ${
+                          isSelected
+                            ? 'border-blue-900 bg-blue-50/60 ring-2 ring-blue-900/20 shadow-xs'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="w-6 h-6 rounded-full border border-white shadow-xs shrink-0"
+                              style={{ backgroundColor: preset.primaryHex }}
+                            />
+                            <span
+                              className="w-3.5 h-3.5 rounded-full border border-slate-200 shrink-0"
+                              style={{ backgroundColor: preset.accentHex }}
+                            />
+                          </div>
+                          {isSelected && (
+                            <span className="w-5 h-5 rounded-full bg-blue-900 text-white flex items-center justify-center shadow-2xs">
+                              <Check className="w-3 h-3" />
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900 leading-tight">
+                            {preset.nameHi}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            {preset.primaryHex.toUpperCase()}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Color Picker */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                <label className="block text-xs font-bold text-slate-800">
+                  2. कस्टम कलर पिकर (Custom Color Picker)
+                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex items-center gap-2.5 flex-1">
+                    <label
+                      htmlFor="agency-custom-color-picker"
+                      className="relative w-11 h-11 rounded-xl border-2 border-slate-300 shadow-xs overflow-hidden cursor-pointer shrink-0 flex items-center justify-center"
+                      style={{ backgroundColor: formData.primaryColor }}
+                      title="रंग चुनने के लिए क्लिक करें"
+                    >
+                      <input
+                        id="agency-custom-color-picker"
+                        type="color"
+                        value={
+                          /^#[0-9A-Fa-f]{6}$/.test(formData.primaryColor)
+                            ? formData.primaryColor
+                            : DEFAULT_PRIMARY_COLOR
+                        }
+                        onChange={(e) => handleSelectThemeColor(e.target.value, 'custom')}
+                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                      />
+                    </label>
+                    <div className="flex-1">
+                      <div className="text-xs font-semibold text-slate-700 mb-1">
+                        Hex Color Code (उदा. #1E3A8A)
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={7}
+                        value={formData.primaryColor}
+                        onChange={(e) => handleSelectThemeColor(e.target.value, 'custom')}
+                        placeholder="#1e3a8a"
+                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-blue-900"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Live Theme Preview Box */}
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center gap-2 shrink-0">
+                    <span className="px-3 py-1.5 rounded-lg bg-blue-900 text-white text-xs font-bold shadow-2xs">
+                      मुख्य बटन
+                    </span>
+                    <span className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-900 border border-blue-200 text-xs font-bold">
+                      बैज / टैग
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. 30-Day Scheduled Offline JSON Backup Notification Reminder */}
+              <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">
+                        3. 30-दिवसीय ऑफ़लाइन JSON बैकअप रिमाइंडर (Security Backup Schedule)
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        डेटा सुरक्षा के लिए हर 30 दिन में ऑफ़लाइन JSON बैकअप डाउनलोड करने हेतु स्वचालित लोकल नोटिफिकेशन रिमाइंडर।
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Enable / Disable Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleBackupReminder(!backupStatus.settings.enabled)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 border ${
+                      backupStatus.settings.enabled
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {backupStatus.settings.enabled ? '✓ रिमाइंडर चालू (ON)' : 'रिमाइंडर बंद (OFF)'}
+                  </button>
+                </div>
+
+                {/* Schedule Status Strip */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  <div className="p-2.5 bg-white rounded-lg border border-emerald-200/80 flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">अंतिम ऑफ़लाइन बैकअप:</span>
+                    <span className="font-bold text-slate-900">
+                      {backupStatus.lastBackupDateFormatted || 'अभी तक नहीं'}
+                    </span>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-lg border border-emerald-200/80 flex items-center justify-between">
+                    <span className="text-slate-500 font-medium flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>अगला 30-दिन रिमाइंडर:</span>
+                    </span>
+                    <span className="font-bold text-emerald-800">
+                      {backupStatus.settings.enabled
+                        ? `${backupStatus.nextReminderDateFormatted} (${backupStatus.daysUntilNextReminder} दिन शेष)`
+                        : 'बंद है (Disabled)'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Action Buttons: Download JSON Backup Now & Test Local Notification */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleDownloadJsonBackupNow}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>अभी ऑफ़लाइन JSON बैकअप डाउनलोड करें</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestBackupNotification}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 text-xs font-semibold transition cursor-pointer"
+                    title="लोकल नोटिफिकेशन रिमाइंडर की जांच करें"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>टेस्ट रिमाइंडर भेजें</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
             <button
@@ -564,10 +880,13 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
                   agencyGstin: agency.gstin || '',
                   agencyUpiId: agency.upiId || '',
                   billingPolicy: agency.billingPolicy || 'calendar_days',
+                  primaryColor: agency.primaryColor || DEFAULT_PRIMARY_COLOR,
+                  themePreset: agency.themePreset || 'navy',
                 });
+                applyPrimaryTheme(agency.primaryColor || DEFAULT_PRIMARY_COLOR);
                 setErrorMessage('');
               }}
-              className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1"
+              className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>बदलाव रद्द करें (Reset)</span>
@@ -577,17 +896,17 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
               >
                 बंद करें
               </button>
 
               <button
                 type="submit"
-                className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md transition"
+                className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-xs font-bold text-white flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
               >
                 <Save className="w-4 h-4" />
-                <span>प्रोफाइल सुरक्षित करें (Save Profile)</span>
+                <span>सेटिंग्स सुरक्षित करें (Save)</span>
               </button>
             </div>
           </div>

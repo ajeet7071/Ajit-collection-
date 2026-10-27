@@ -31,6 +31,7 @@ interface CloudBackupModalProps {
   onOpenAuth: () => void;
   onPerformBackup: () => Promise<boolean>;
   onRestoreBackup: (data: FullBackupPayload) => void;
+  onUpdateProfile?: (updatedAgency: Agency, updatedUser: UserProfile) => void;
   lang: Language;
 }
 
@@ -42,6 +43,7 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
   onOpenAuth,
   onPerformBackup,
   onRestoreBackup,
+  onUpdateProfile,
   lang,
 }) => {
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -52,21 +54,34 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
   const [availableBackup, setAvailableBackup] = useState<FullBackupPayload | null>(null);
   const [isCheckingBackup, setIsCheckingBackup] = useState(false);
   const [isSigningInGoogle, setIsSigningInGoogle] = useState(false);
+  const [manualGmailInput, setManualGmailInput] = useState('');
+  const [isEditingGmail, setIsEditingGmail] = useState(false);
   const [autoSyncOnLaunch, setAutoSyncOnLaunch] = useState<boolean>(() => storageService.getAutoSyncOnLaunch());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Only show an email if the user actually logged in with Google or explicitly linked a Gmail ID
+  const isExplicitlyLinked =
+    typeof window !== 'undefined' && localStorage.getItem('ajeet_user_explicit_email_linked') === 'true';
+  const linkedEmail = (
+    auth.currentUser?.email ||
+    (currentUser.authProvider === 'google' ? currentUser.email : '') ||
+    (isExplicitlyLinked ? currentUser.email || agency.email || '' : '')
+  ).trim();
 
   useEffect(() => {
     if (isOpen) {
       setStatusMsg(null);
+      setIsEditingGmail(false);
+      setManualGmailInput('');
       setAutoSyncOnLaunch(storageService.getAutoSyncOnLaunch());
-      if (auth.currentUser) {
+      if (auth.currentUser || linkedEmail) {
         checkExistingBackup();
       } else {
         setAvailableBackup(null);
         setIsCheckingBackup(false);
       }
     }
-  }, [isOpen, currentUser]);
+  }, [isOpen, currentUser, linkedEmail]);
 
   const handleToggleAutoSync = () => {
     const nextVal = !autoSyncOnLaunch;
@@ -83,13 +98,14 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
   if (!isOpen) return null;
 
   const checkExistingBackup = async () => {
-    if (!auth.currentUser) {
+    const lookupId = auth.currentUser?.uid || currentUser.id;
+    if (!auth.currentUser && !linkedEmail) {
       setAvailableBackup(null);
       return;
     }
     setIsCheckingBackup(true);
     try {
-      const data = await firebaseService.getCloudBackup();
+      const data = await firebaseService.getCloudBackup(lookupId);
       setAvailableBackup(data);
     } catch (err) {
       console.warn('Check cloud backup notice:', err);
@@ -98,20 +114,94 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
     }
   };
 
+  const applyLinkedGmail = (emailToLink: string, uid?: string) => {
+    const cleanEmail = emailToLink.trim().toLowerCase();
+    localStorage.setItem('ajeet_user_explicit_email_linked', 'true');
+    const updatedUser: UserProfile = {
+      ...currentUser,
+      id: uid || currentUser.id,
+      email: cleanEmail,
+    };
+    const updatedAgency: Agency = {
+      ...agency,
+      email: cleanEmail,
+    };
+    storageService.saveCurrentUser(updatedUser);
+    storageService.saveAgency(updatedAgency);
+    if (onUpdateProfile) {
+      onUpdateProfile(updatedAgency, updatedUser);
+    }
+  };
+
+  const handleUnlinkGmail = () => {
+    localStorage.removeItem('ajeet_user_explicit_email_linked');
+    const updatedUser: UserProfile = {
+      ...currentUser,
+      email: '',
+      authProvider: 'phone',
+    };
+    const updatedAgency: Agency = {
+      ...agency,
+      email: '',
+    };
+    storageService.saveCurrentUser(updatedUser);
+    storageService.saveAgency(updatedAgency);
+    if (onUpdateProfile) {
+      onUpdateProfile(updatedAgency, updatedUser);
+    }
+    setIsEditingGmail(false);
+    setManualGmailInput('');
+    setStatusMsg({
+      type: 'success',
+      text: '✓ पुरानी ईमेल आईडी हटा दी गई है। अब आप नई Gmail आईडी जोड़ सकते हैं।',
+    });
+  };
+
+  const handleManualGmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = manualGmailInput.trim().toLowerCase();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setStatusMsg({
+        type: 'error',
+        text: 'कृपया मान्य Gmail / ईमेल आईडी दर्ज करें (उदा. yourname@gmail.com)',
+      });
+      return;
+    }
+    applyLinkedGmail(trimmed);
+    setManualGmailInput('');
+    setIsEditingGmail(false);
+    setStatusMsg({
+      type: 'success',
+      text: `✓ आपकी Gmail आईडी (${trimmed}) सफलतापूर्वक जोड़ दी गई है!`,
+    });
+    checkExistingBackup();
+  };
+
   const handleQuickGoogleLink = async () => {
     setIsSigningInGoogle(true);
     setStatusMsg(null);
     try {
-      await firebaseService.loginWithGoogle();
+      const user = await firebaseService.loginWithGoogle(manualGmailInput.trim() || undefined);
+      if (!user) {
+        setStatusMsg({
+          type: 'error',
+          text: 'Google लॉगिन पॉप-अप बंद कर दिया गया। आप नीचे बॉक्स में अपनी Gmail आईडी लिखकर भी सीधे जोड़ सकते हैं।',
+        });
+        return;
+      }
+      if (user.email) {
+        applyLinkedGmail(user.email, user.uid);
+      }
+      setIsEditingGmail(false);
       setStatusMsg({
         type: 'success',
-        text: '✓ Google खाता सफलतापूर्वक लिंक हो गया है।',
+        text: `✓ Google खाता (${user.email || ''}) सफलतापूर्वक लिंक हो गया है।`,
       });
       await checkExistingBackup();
     } catch (err: any) {
       setStatusMsg({
         type: 'error',
-        text: `Google लॉगिन विफल: ${err.message || 'रद्द किया गया'}`,
+        text: `Google लॉगिन सूचना: ${err?.message || 'आप नीचे बॉक्स में अपनी Gmail आईडी दर्ज करके भी जोड़ सकते हैं।'}`,
       });
     } finally {
       setIsSigningInGoogle(false);
@@ -119,12 +209,12 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
   };
 
   const handleBackupNow = async () => {
-    if (!auth.currentUser) {
+    if (!linkedEmail) {
       setStatusMsg({
         type: 'error',
         text: lang === 'hi'
-          ? 'कृपया पहले ऊपर "Gmail जोड़ें" बटन दबाकर अपना Google खाता लिंक करें।'
-          : 'Please sign in with Google above to enable cloud backup.',
+          ? 'क्लाउड बैकअप के लिए कृपया पहले ऊपर अपनी Gmail आईडी जोड़ें।'
+          : 'Please add your Gmail ID above to enable cloud backup.',
       });
       return;
     }
@@ -137,7 +227,7 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
         setStatusMsg({
           type: 'success',
           text: lang === 'hi'
-            ? '✓ बधाई! आपकी एजेंसी का संपूर्ण डेटा (ग्राहक, बिल, रूट, रसीदें) Google Cloud पर सुरक्षित हो गया है।'
+            ? `✓ बधाई! आपकी एजेंसी का संपूर्ण डेटा आपकी Gmail आईडी (${linkedEmail}) पर Google Cloud में सुरक्षित हो गया है।`
             : '✓ Success! Complete agency data backed up to Google Cloud.',
         });
         await checkExistingBackup();
@@ -323,45 +413,106 @@ export const CloudBackupModal: React.FC<CloudBackupModalProps> = ({
         {/* Content Body */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 overscroll-contain">
           
-          {/* Linked Account Status */}
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-900 flex items-center justify-center">
-                <Mail className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <span>{auth.currentUser?.email || currentUser.email || 'कोई Gmail खाता लिंक नहीं है'}</span>
-                  {auth.currentUser ? (
-                    <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 font-bold">
-                      ✓ सक्रिय क्लाउड
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 font-bold">
-                      ऑफलाइन मोड
-                    </span>
-                  )}
+          {/* Linked Account Status & Add Gmail Option */}
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-900 flex items-center justify-center shrink-0">
+                  <Mail className="w-4 h-4" />
                 </div>
-                <div className="text-[11px] text-slate-500 font-mono">
-                  संचालक: {currentUser.name} (+91 {currentUser.mobile})
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                    <span className="truncate">
+                      {linkedEmail ? linkedEmail : 'कोई Gmail आईडी नहीं जुड़ी है'}
+                    </span>
+                    {linkedEmail ? (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 font-bold shrink-0">
+                        ✓ Gmail लिंक है
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 font-bold shrink-0">
+                        मोबाइल लॉगिन
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 font-mono">
+                    लॉगिन मोबाइल: +91 {currentUser.mobile || agency.mobile}
+                  </div>
                 </div>
               </div>
+
+              {linkedEmail && !isEditingGmail && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualGmailInput(linkedEmail);
+                      setIsEditingGmail(true);
+                    }}
+                    className="px-2.5 py-1 bg-white border border-slate-300 text-slate-700 rounded-lg text-[11px] font-semibold hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    बदलें
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleUnlinkGmail}
+                    className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[11px] font-semibold hover:bg-rose-100 transition cursor-pointer"
+                  >
+                    हटाएं
+                  </button>
+                </div>
+              )}
             </div>
 
-            {!auth.currentUser && (
-              <button
-                type="button"
-                onClick={handleQuickGoogleLink}
-                disabled={isSigningInGoogle}
-                className="px-3 py-1.5 bg-blue-900 text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition shadow-xs flex items-center gap-1.5"
-              >
-                {isSigningInGoogle ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Mail className="w-3.5 h-3.5" />
-                )}
-                <span>Gmail जोड़ें</span>
-              </button>
+            {/* Show Add / Link Gmail UI when logged in via Mobile (no email linked) or when changing Gmail */}
+            {(!linkedEmail || isEditingGmail) && (
+              <div className="pt-2 border-t border-slate-200 space-y-2.5">
+                <div className="text-[11px] font-bold text-blue-950">
+                  क्लाउड बैकअप के लिए अपनी Gmail आईडी जोड़ें:
+                </div>
+
+                {/* Option 1: Direct Gmail ID input */}
+                <form onSubmit={handleManualGmailSubmit} className="flex gap-2">
+                  <input
+                    type="email"
+                    required
+                    value={manualGmailInput}
+                    onChange={(e) => setManualGmailInput(e.target.value)}
+                    placeholder="अपनी Gmail आईडी लिखें (उदा. name@gmail.com)"
+                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-900"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3.5 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition shrink-0 cursor-pointer shadow-2xs"
+                  >
+                    Gmail जोड़ें
+                  </button>
+                  {isEditingGmail && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingGmail(false)}
+                      className="px-2.5 py-2 bg-white border border-slate-300 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-100 transition shrink-0 cursor-pointer"
+                    >
+                      रद्द
+                    </button>
+                  )}
+                </form>
+
+                {/* Option 2: Google Account Sign-In Popup */}
+                <button
+                  type="button"
+                  onClick={handleQuickGoogleLink}
+                  disabled={isSigningInGoogle}
+                  className="w-full py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 flex items-center justify-center gap-2 transition shadow-2xs cursor-pointer"
+                >
+                  {isSigningInGoogle ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-900" />
+                  ) : (
+                    <Mail className="w-3.5 h-3.5 text-blue-900" />
+                  )}
+                  <span>या Google से सीधे साइन-इन करके Gmail जोड़ें</span>
+                </button>
+              </div>
             )}
           </div>
 

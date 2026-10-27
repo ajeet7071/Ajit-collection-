@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import { 
   FileText, 
   CheckCircle2, 
-  Search,
-  Eye,
-  Trash2
+  Search
 } from 'lucide-react';
 import { 
   Customer, 
@@ -16,9 +14,6 @@ import {
   UserProfile
 } from '../../types';
 import { translations } from '../../i18n/translations';
-import { generateBulkMonthlyBills } from '../../services/billingEngine';
-import { shareInvoicePdfOnWhatsApp } from '../../services/pdfReceiptService';
-import { triggerSms, formatBillReminderSms } from '../../services/smsService';
 
 interface BillingViewProps {
   customers: Customer[];
@@ -34,16 +29,10 @@ interface BillingViewProps {
 }
 
 export const BillingView: React.FC<BillingViewProps> = ({
-  customers,
-  newspapers,
-  deliveries,
   invoices,
   agency,
-  currentUser,
   lang,
   onOpenInvoiceModal,
-  onShareWhatsAppBill,
-  onDeleteInvoice,
 }) => {
   const t = translations[lang];
 
@@ -54,7 +43,6 @@ export const BillingView: React.FC<BillingViewProps> = ({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'unpaid' | 'partial'>('all');
-  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
 
   const filteredInvoices = invoices.filter((inv) => {
     const matchesMonth = !selectedMonth || inv.billingMonth === selectedMonth;
@@ -213,13 +201,12 @@ export const BillingView: React.FC<BillingViewProps> = ({
                 <th className="py-2.5 px-3 text-right font-semibold">{t.billing.prevBalance}</th>
                 <th className="py-2.5 px-3 text-right font-semibold">{t.billing.totalPayable}</th>
                 <th className="py-2.5 px-3 text-center font-semibold">{t.billing.status}</th>
-                <th className="py-2.5 px-3 text-center font-semibold">बिल विवरण</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                  <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
                     इस माह के लिए कोई बिल नहीं मिला। महीने के अंत में सभी सक्रिय ग्राहकों का बिल व लेजर प्रविष्टि स्वतः तैयार हो जाती है।
                   </td>
                 </tr>
@@ -238,8 +225,17 @@ export const BillingView: React.FC<BillingViewProps> = ({
                       </button>
                     </td>
                     <td className="py-2.5 px-3">
-                      <div className="font-bold text-slate-900">{inv.customerName}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">+91 {inv.customerMobile}</div>
+                      <button
+                        type="button"
+                        onClick={() => onOpenInvoiceModal(inv)}
+                        className="text-left group cursor-pointer"
+                        title="ग्राहक का बिल देखने के लिए क्लिक करें"
+                      >
+                        <div className="font-bold text-slate-900 group-hover:text-blue-900 group-hover:underline decoration-blue-400 underline-offset-2 transition">
+                          {inv.customerName}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono">+91 {inv.customerMobile}</div>
+                      </button>
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono text-slate-800">
                       ₹{inv.subtotal}
@@ -267,29 +263,6 @@ export const BillingView: React.FC<BillingViewProps> = ({
                           : t.billing.unpaidStatus}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => onOpenInvoiceModal(inv)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition cursor-pointer shadow-2xs active:scale-95"
-                          title="बिल की सारी जानकारी व सभी ऐक्शन देखें"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-blue-700" />
-                          <span>विवरण देखें</span>
-                        </button>
-                        {onDeleteInvoice && (
-                          <button
-                            type="button"
-                            onClick={() => setInvoiceToDelete(inv)}
-                            className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition cursor-pointer"
-                            title="इस बिल को डिलीट करें"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
                   </tr>
                 ))
               )}
@@ -298,63 +271,6 @@ export const BillingView: React.FC<BillingViewProps> = ({
         </div>
 
       </div>
-
-      {/* Delete Confirmation Modal */}
-      {invoiceToDelete && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-[90vw] sm:w-full max-h-[85dvh] overflow-y-auto overscroll-contain p-5 shadow-2xl border border-rose-200 text-center space-y-4 animate-in fade-in zoom-in-95 my-auto">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center shadow-inner">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <div className="space-y-1.5">
-              <h3 className="text-base font-black text-slate-900">
-                {lang === 'hi' ? 'क्या आप इस इनवॉइस को डिलीट करना चाहते हैं?' : 'Delete this invoice?'}
-              </h3>
-              <p className="text-xs text-slate-700 font-bold">
-                {invoiceToDelete.customerName} - <span className="font-mono text-blue-900">{invoiceToDelete.invoiceNumber}</span>
-              </p>
-              <div className="text-[11px] bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-rose-700 text-left space-y-1">
-                <div className="font-bold flex items-center justify-between">
-                  <span>बिल राशि (Amount):</span>
-                  <span className="font-mono font-black">₹{invoiceToDelete.totalPayable}.00</span>
-                </div>
-                <div className="text-[10px] text-rose-600 leading-tight">
-                  {lang === 'hi'
-                    ? '• यह बिल इनवॉइस रिकॉर्ड एवं खाता बही (Ledger) से हटा दिया जाएगा।'
-                    : '• This invoice will be permanently removed from records & ledger.'}
-                </div>
-                <div className="text-[10px] text-rose-600 leading-tight">
-                  {lang === 'hi'
-                    ? '• ग्राहक का बकाया बैलेंस तदनुसार पुनः समायोजित हो जाएगा।'
-                    : '• Customer balance will be adjusted accordingly.'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setInvoiceToDelete(null)}
-                className="flex-1 py-2 px-3 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
-              >
-                {lang === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onDeleteInvoice && invoiceToDelete) {
-                    onDeleteInvoice(invoiceToDelete.id);
-                  }
-                  setInvoiceToDelete(null);
-                }}
-                className="flex-1 py-2 px-3 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 rounded-xl transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{lang === 'hi' ? 'हाँ, डिलीट करें' : 'Yes, Delete'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
