@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wifi, 
   WifiOff, 
   RefreshCw,
-  Settings
+  Settings,
+  Bluetooth
 } from 'lucide-react';
 import { UserProfile, Language } from '../../types';
 import { translations } from '../../i18n/translations';
+import { btPrinterManager } from '../../services/bluetoothPrinterService';
 
 interface NavbarProps {
   currentUser?: UserProfile;
@@ -16,6 +18,7 @@ interface NavbarProps {
   onOpenCloudBackup?: () => void;
   onOpenMore?: () => void;
   onOpenSettings?: () => void;
+  onOpenBluetoothPrinter?: () => void;
   isOnline: boolean;
   pendingSyncCount: number;
   onSync: () => void;
@@ -26,6 +29,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   lang,
   onOpenSettings,
+  onOpenBluetoothPrinter,
   isOnline,
   pendingSyncCount,
   onSync,
@@ -33,6 +37,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   onTabChange,
 }) => {
   const t = translations[lang];
+  const [isBtConnected, setIsBtConnected] = useState<boolean>(() =>
+    btPrinterManager.isConnected()
+  );
+
+  useEffect(() => {
+    btPrinterManager.trySilentReconnect();
+    return btPrinterManager.subscribe(() => {
+      setIsBtConnected(btPrinterManager.isConnected());
+    });
+  }, []);
 
   const navLinks = [
     { id: 'customers', label: t.nav.customers },
@@ -84,8 +98,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* Right Zone: Actions (Sync status & Settings) */}
-          <div className="flex items-center gap-2 shrink-0 z-10 ml-auto">
+          {/* Right Zone: Actions (Sync status, Bluetooth Printer & Settings) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 z-10 ml-auto">
             {/* Offline & Sync Indicator */}
             {isOnline ? (
               pendingSyncCount > 0 ? (
@@ -108,6 +122,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <WifiOff className="w-3.5 h-3.5" />
                 <span>Offline</span>
               </div>
+            )}
+
+            {onOpenBluetoothPrinter && (
+              <button
+                type="button"
+                onClick={onOpenBluetoothPrinter}
+                className={`relative p-2 rounded-xl border transition cursor-pointer shadow-2xs ${
+                  isBtConnected
+                    ? 'text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border-emerald-300'
+                    : 'text-blue-900 bg-blue-50 hover:bg-blue-100 border-blue-200'
+                }`}
+                title="ब्लूटूथ प्रिंटर ऑटो-प्रिंट कॉन्फ़िगरेशन (Bluetooth POS Setup)"
+              >
+                <Bluetooth className="w-4 h-4" />
+                <span
+                  className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${
+                    isBtConnected ? 'bg-emerald-500' : 'bg-amber-500'
+                  }`}
+                />
+              </button>
             )}
 
             {onOpenSettings && (

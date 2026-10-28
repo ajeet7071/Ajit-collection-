@@ -4,7 +4,10 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import { ConfirmationResult } from 'firebase/auth';
 import { Agency, UserProfile, Language } from '../../types';
@@ -37,6 +40,8 @@ export const OtpLoginPage: React.FC<OtpLoginPageProps> = ({
   const [otpStep, setOtpStep] = useState<'enter_mobile' | 'sending' | 'verify_otp' | 'verifying'>(
     'enter_mobile'
   );
+  const [sendingStage, setSendingStage] = useState<'recaptcha' | 'dispatching'>('recaptcha');
+  const [sendingProgress, setSendingProgress] = useState(0);
   const [otpCode, setOtpCode] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
@@ -53,6 +58,23 @@ export const OtpLoginPage: React.FC<OtpLoginPageProps> = ({
     }
   }, [otpStep, countdown]);
 
+  // Smooth visual progress bar while waiting for Firebase SMS service response
+  useEffect(() => {
+    if (otpStep !== 'sending') {
+      setSendingProgress(0);
+      return;
+    }
+    setSendingProgress(18);
+    const interval = window.setInterval(() => {
+      setSendingProgress((prev) => {
+        if (prev >= 92) return prev;
+        const step = prev < 50 ? 12 : prev < 75 ? 6 : 2;
+        return Math.min(92, prev + step);
+      });
+    }, 350);
+    return () => window.clearInterval(interval);
+  }, [otpStep]);
+
   // Step 1: Send Real SMS OTP to Mobile Number via Firebase Authentication
   const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -66,14 +88,18 @@ export const OtpLoginPage: React.FC<OtpLoginPageProps> = ({
     }
 
     setOtpStep('sending');
+    setSendingStage('recaptcha');
     setOtpCode('');
 
     try {
       const verifier = firebaseService.setupRecaptcha('firebase-login-recaptcha-box', 'invisible');
+      setSendingStage('dispatching');
+      setSendingProgress((prev) => Math.max(prev, 48));
       const fullPhone = `+91${cleanMobile}`;
       const res = await firebaseService.sendPhoneOtp(fullPhone, verifier);
 
       if (res.success && res.confirmationResult) {
+        setSendingProgress(100);
         setConfirmationResult(res.confirmationResult);
         setOtpCode('');
         setCountdown(60);
@@ -231,7 +257,7 @@ export const OtpLoginPage: React.FC<OtpLoginPageProps> = ({
                       }
                     }}
                     placeholder="मोबाइल नंबर डालें"
-                    className="w-full pl-12 pr-3.5 py-2.5 bg-slate-50 border-2 border-slate-300 rounded-xl text-base font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-900"
+                    className="w-full pl-12 pr-3.5 py-2.5 bg-slate-50 border-2 border-slate-300 rounded-xl text-base font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-blue-900 disabled:opacity-75"
                   />
                 </div>
 
@@ -251,17 +277,95 @@ export const OtpLoginPage: React.FC<OtpLoginPageProps> = ({
             {/* Visible DOM container for Firebase RecaptchaVerifier */}
             <div id="firebase-login-recaptcha-box" className="flex justify-center my-1 min-h-[2px]" />
 
+            {/* Dedicated Visual Progress Loader Card while waiting for Firebase SMS OTP */}
+            {otpStep === 'sending' && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="p-4 rounded-2xl bg-indigo-50/90 border-2 border-indigo-200 space-y-3 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-indigo-950">
+                        Sending OTP to +91 {mobileNumber.replace(/\D/g, '')}
+                      </p>
+                      <p className="text-[11px] font-semibold text-indigo-700">
+                        {sendingStage === 'recaptcha'
+                          ? 'सुरक्षा जाँच (reCAPTCHA) सत्यापित की जा रही है...'
+                          : 'Firebase SMS सेवा द्वारा 6-अंकों का OTP भेजा जा रहा है...'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono font-black text-indigo-700 bg-white px-2 py-0.5 rounded-lg border border-indigo-200">
+                    {sendingProgress}%
+                  </span>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full h-2 bg-indigo-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${sendingProgress}%` }}
+                  />
+                </div>
+
+                {/* Step Indicators */}
+                <div className="grid grid-cols-2 gap-2 pt-0.5 text-[11px] font-bold">
+                  <div
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
+                      sendingStage === 'dispatching'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-white border-indigo-200 text-indigo-900'
+                    }`}
+                  >
+                    <ShieldCheck
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        sendingStage === 'dispatching'
+                          ? 'text-emerald-600'
+                          : 'text-indigo-600 animate-pulse'
+                      }`}
+                    />
+                    <span className="truncate">1. सुरक्षा सत्यापन</span>
+                  </div>
+                  <div
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
+                      sendingStage === 'dispatching'
+                        ? 'bg-white border-indigo-300 text-indigo-950 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-400'
+                    }`}
+                  >
+                    <MessageSquare
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        sendingStage === 'dispatching'
+                          ? 'text-indigo-600 animate-bounce'
+                          : 'text-slate-400'
+                      }`}
+                    />
+                    <span className="truncate">2. SMS OTP डिस्पैच</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Send OTP Button when in Step 1 */}
             {(otpStep === 'enter_mobile' || otpStep === 'sending') && (
               <button
                 type="submit"
                 disabled={otpStep === 'sending' || mobileNumber.replace(/\D/g, '').length !== 10}
-                className="w-full py-3.5 px-4 rounded-xl bg-blue-900 hover:bg-blue-800 disabled:bg-slate-300 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"
+                className={`w-full py-3.5 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition cursor-pointer ${
+                  otpStep === 'sending'
+                    ? 'bg-indigo-700 cursor-wait opacity-95'
+                    : 'bg-blue-900 hover:bg-blue-800 disabled:bg-slate-300 disabled:cursor-not-allowed'
+                }`}
               >
                 {otpStep === 'sending' ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>मोबाइल पर SMS OTP भेजा जा रहा है...</span>
+                    <span>मोबाइल पर SMS OTP भेजा जा रहा है... कृपया प्रतीक्षा करें</span>
                   </>
                 ) : (
                   <>
@@ -287,17 +391,22 @@ export const OtpLoginPage: React.FC<OtpLoginPageProps> = ({
                     maxLength={6}
                     required
                     autoFocus
+                    disabled={otpStep === 'verifying'}
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                     placeholder="• • • • • •"
-                    className="w-full px-4 py-3 bg-white border-2 border-blue-600 rounded-xl text-center text-xl font-mono font-black tracking-[0.35em] text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-900"
+                    className="w-full px-4 py-3 bg-white border-2 border-blue-600 rounded-xl text-center text-xl font-mono font-black tracking-[0.35em] text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-900 disabled:opacity-75"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={otpStep === 'verifying' || otpCode.replace(/\D/g, '').length !== 6}
-                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"
+                  className={`w-full py-3.5 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition cursor-pointer ${
+                    otpStep === 'verifying'
+                      ? 'bg-emerald-700 cursor-wait opacity-95'
+                      : 'bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed'
+                  }`}
                 >
                   {otpStep === 'verifying' ? (
                     <>

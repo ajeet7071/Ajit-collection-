@@ -17,6 +17,9 @@ import { DirectCollectModal } from './components/common/DirectCollectModal';
 import { RouteManagementModal } from './components/common/RouteManagementModal';
 import { AgencyProfileModal } from './components/common/AgencyProfileModal';
 import { CloudBackupModal } from './components/common/CloudBackupModal';
+import { BluetoothPrinterModal } from './components/common/BluetoothPrinterModal';
+import { btPrinterManager } from './services/bluetoothPrinterService';
+import { triggerBluetoothThermalPrint } from './services/printService';
 import { firebaseService, FullBackupPayload, auth } from './services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -103,6 +106,7 @@ export default function App() {
   // Agency & Agent Profile Modal state
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileModalInitialTab, setProfileModalInitialTab] = useState<'profile' | 'agency' | 'upi' | 'theme'>('profile');
+  const [isBtPrinterModalOpen, setIsBtPrinterModalOpen] = useState(false);
 
   // Apply customized primary color theme whenever agency.primaryColor changes
   useEffect(() => {
@@ -466,6 +470,11 @@ export default function App() {
       syncEngine.enqueue('payment', 'create', res.payment);
       setPendingSyncCount(syncEngine.getPendingCount());
     }
+
+    // If user enabled "Auto-Print on Payment", automatically send print command to Bluetooth printer
+    if (btPrinterManager.getConfig().autoPrintOnPayment) {
+      triggerBluetoothThermalPrint(res.payment, agency);
+    }
   };
 
   // 5b. Delete / Revert mistaken payment entry from Customer Ledger
@@ -798,6 +807,7 @@ export default function App() {
           setProfileModalInitialTab('theme');
           setIsProfileModalOpen(true);
         }}
+        onOpenBluetoothPrinter={() => setIsBtPrinterModalOpen(true)}
         isOnline={isOnline}
         pendingSyncCount={pendingSyncCount}
         onSync={handleSync}
@@ -1031,6 +1041,7 @@ export default function App() {
         onClose={() => setSelectedReceipt(null)}
         lang={lang}
         onShareWhatsApp={handleShareReceiptWhatsApp}
+        onOpenBluetoothSetup={() => setIsBtPrinterModalOpen(true)}
       />
 
       <WhatsAppModal
@@ -1082,6 +1093,7 @@ export default function App() {
           setIsProfileModalOpen(true);
         }}
         onOpenCloudBackup={() => setIsCloudBackupOpen(true)}
+        onOpenBluetoothPrinter={() => setIsBtPrinterModalOpen(true)}
         onLogoutToOtpPage={() => {
           storageService.setOtpSessionVerified(false);
           setIsOtpAuthenticated(false);
@@ -1089,6 +1101,12 @@ export default function App() {
         currentUser={currentUser}
         lang={lang}
         onLanguageChange={setLang}
+      />
+
+      <BluetoothPrinterModal
+        isOpen={isBtPrinterModalOpen}
+        onClose={() => setIsBtPrinterModalOpen(false)}
+        agency={agency}
       />
 
       <RouteManagementModal

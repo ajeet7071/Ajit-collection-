@@ -42,6 +42,7 @@ export interface Agency {
   currency: string;
   primaryColor?: string;
   themePreset?: string;
+  logoUrl?: string;
 }
 
 export type CustomerType = 'residential' | 'commercial' | 'institution';

@@ -16,7 +16,8 @@ import {
   Download,
   Lock,
   Globe,
-  Palette
+  Palette,
+  Bluetooth
 } from 'lucide-react';
 import { Language, UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -29,6 +30,7 @@ interface MoreMenuModalProps {
   onOpenRouteManagement: () => void;
   onOpenAgencyProfile: (initialTab?: 'profile' | 'agency' | 'upi' | 'theme') => void;
   onOpenCloudBackup: () => void;
+  onOpenBluetoothPrinter?: () => void;
   onLogoutToOtpPage?: () => void;
   currentUser: UserProfile;
   lang: Language;
@@ -43,6 +45,7 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
   onOpenRouteManagement,
   onOpenAgencyProfile,
   onOpenCloudBackup,
+  onOpenBluetoothPrinter,
   onLogoutToOtpPage,
   currentUser,
   lang,
@@ -52,6 +55,16 @@ export const MoreMenuModal: React.FC<MoreMenuModalProps> = ({
   const t = translations[lang];
 
   const menuItems = [
+    {
+      id: 'bt_printer_setup',
+      label: 'ब्लूटूथ थर्मल प्रिंटर ऑटो-प्रिंट सेटअप (Bluetooth POS)',
+      icon: Bluetooth,
+      desc: 'मोबाइल से जुड़े ब्लूटूथ प्रिंटर को कनेक्ट करें व 1-क्लिक ऑटो-प्रिंट कमांड सेट करें',
+      action: () => {
+        onClose();
+        if (onOpenBluetoothPrinter) onOpenBluetoothPrinter();
+      },
+    },
     { 
       id: 'profile_manage', 
       label: 'एजेंट एवं एजेंसी सेटिंग्स (Settings & UPI)', 

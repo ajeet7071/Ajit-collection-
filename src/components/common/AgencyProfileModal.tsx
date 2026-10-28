@@ -66,6 +66,7 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
     billingPolicy: agency.billingPolicy || 'calendar_days',
     primaryColor: agency.primaryColor || DEFAULT_PRIMARY_COLOR,
     themePreset: agency.themePreset || 'navy',
+    agencyLogoUrl: agency.logoUrl || '',
   });
 
   const [activeTab, setActiveTab] = useState<'profile' | 'agency' | 'upi' | 'theme'>(initialTab);
@@ -97,6 +98,7 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
         billingPolicy: agency.billingPolicy || 'calendar_days',
         primaryColor: agency.primaryColor || DEFAULT_PRIMARY_COLOR,
         themePreset: agency.themePreset || 'navy',
+        agencyLogoUrl: agency.logoUrl || '',
       });
       setActiveTab(initialTab);
       setBackupStatus(backupReminderService.getStatus());
@@ -183,6 +185,44 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
     setSuccessMessage('✓ लोकल बैकअप रिमाइंडर नोटिफिकेशन भेजा गया!');
   };
 
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('कृपया मान्य इमेज फाइल (PNG, JPG, WEBP) चुनें।');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxSize = 240;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxSize) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/png', 0.9);
+          handleInputChange('agencyLogoUrl', dataUrl);
+          setSuccessMessage('✓ एजेंसी लोगो सफलतापूर्वक अपलोड हो गया! सहेजने के लिए नीचे बटन दबाएं।');
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -236,6 +276,7 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
       billingPolicy: formData.billingPolicy as any,
       primaryColor: validPrimaryColor,
       themePreset: formData.themePreset,
+      logoUrl: formData.agencyLogoUrl || undefined,
     };
 
     const updatedUser: UserProfile = {
@@ -461,6 +502,45 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
           {/* TAB 2: Agency Details */}
           {activeTab === 'agency' && (
             <div className="space-y-4">
+              {/* Agency Logo Upload & Dynamic Preview */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={formData.agencyLogoUrl || '/assets/aistudio/file_0000000043f482118d45f9a7391eadfe_4733c263.png'}
+                    alt="Agency Logo"
+                    className="w-14 h-14 rounded-full object-cover border-2 border-amber-400 shadow-xs bg-white shrink-0"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">
+                      एजेंसी का लोगो (Agency Logo)
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      यह लोगो रसीद प्रीव्यू (ReceiptModal), बिल और प्रिंट स्लिप के हेडर में दिखाई देगा।
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <label className="px-3 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold cursor-pointer transition shadow-2xs">
+                    <span>लोगो अपलोड करें</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {formData.agencyLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange('agencyLogoUrl', '')}
+                      className="px-2.5 py-2 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition cursor-pointer"
+                    >
+                      हटाएं
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -882,6 +962,7 @@ export const AgencyProfileModal: React.FC<AgencyProfileModalProps> = ({
                   billingPolicy: agency.billingPolicy || 'calendar_days',
                   primaryColor: agency.primaryColor || DEFAULT_PRIMARY_COLOR,
                   themePreset: agency.themePreset || 'navy',
+                  agencyLogoUrl: agency.logoUrl || '',
                 });
                 applyPrimaryTheme(agency.primaryColor || DEFAULT_PRIMARY_COLOR);
                 setErrorMessage('');

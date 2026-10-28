@@ -21,7 +21,8 @@ import {
   ArrowUpDown,
   Filter,
   MessageSquare,
-  Trash2
+  Trash2,
+  Bluetooth
 } from 'lucide-react';
 import { 
   PaymentRecord, 
@@ -36,7 +37,11 @@ import {
 } from '../../types';
 import { translations } from '../../i18n/translations';
 import { processCustomerPayment } from '../../services/paymentService';
-import { triggerDirectPrintReceipt } from '../../services/printService';
+import {
+  buildReceiptThermalSnippet,
+  triggerDirectPrintReceipt,
+  triggerBluetoothThermalPrint
+} from '../../services/printService';
 import { 
   formatOverdueReminderMessage, 
   getWhatsAppClickUrl 
@@ -107,8 +112,41 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [notes, setNotes] = useState('');
   const [txRef, setTxRef] = useState('');
+  const [isQuickPayPreviewOpen, setIsQuickPayPreviewOpen] = useState(false);
+  const [previewReceiptItem, setPreviewReceiptItem] = useState<PaymentRecord | null>(null);
 
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId) || customers[0];
+
+  const draftQuickPaymentRecord: PaymentRecord | null = useMemo(() => {
+    if (!selectedCustomer) return null;
+    const parsedAmt = Math.max(0, parseFloat(amountInput) || 0);
+    const remainingAfterPay = Math.max(0, (selectedCustomer.currentBalance || 0) - parsedAmt);
+    const summaryNote = [
+      notes || 'त्वरित वसूली (Quick Payment)',
+      `पूर्व बकाया: ₹${selectedCustomer.currentBalance || 0} | शेष बकाया: ₹${remainingAfterPay}`,
+    ]
+      .filter(Boolean)
+      .join(' • ');
+
+    return {
+      id: `pay_preview_${Date.now()}`,
+      agencyId: agency.id,
+      receiptNumber: `RCP-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`,
+      customerId: selectedCustomer.id,
+      customerName: selectedCustomer.name,
+      customerMobile: selectedCustomer.mobile,
+      amount: parsedAmt,
+      paymentDate: new Date().toISOString().split('T')[0],
+      paymentMethod,
+      transactionRef: txRef || undefined,
+      isAdvance: parsedAmt > (selectedCustomer.currentBalance || 0),
+      collectedByAgentId: currentUser.id,
+      collectedByAgentName: currentUser.name,
+      handoverStatus: 'in_hand',
+      notes: summaryNote,
+      createdAt: new Date().toISOString(),
+    };
+  }, [selectedCustomer, amountInput, paymentMethod, notes, txRef, currentUser, agency.id]);
 
   // 1. Identify Overdue Customers (currentBalance > 0)
   const allOverdueCustomers = useMemo(() => {
@@ -224,9 +262,39 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
     );
 
     onRecordPaymentSuccess(result);
+    setIsQuickPayPreviewOpen(false);
     setIsNewReceiptOpen(false);
     // Direct mobile printer trigger
     triggerDirectPrintReceipt(result.payment, agency, 'thermal');
+    onOpenReceiptModal(result.payment);
+  };
+
+  const handleSubmitAndBluetoothPrint = () => {
+    const amt = parseFloat(amountInput);
+    if (!amt || amt <= 0 || !selectedCustomer) return;
+
+    const result = processCustomerPayment(
+      {
+        customerId: selectedCustomer.id,
+        customerName: selectedCustomer.name,
+        customerMobile: selectedCustomer.mobile,
+        amount: amt,
+        paymentMethod,
+        collectedByAgentId: currentUser.id,
+        collectedByAgentName: currentUser.name,
+        transactionRef: txRef || undefined,
+        notes: notes || undefined,
+        agencyUpiId: agency.upiId,
+      },
+      selectedCustomer,
+      invoices
+    );
+
+    onRecordPaymentSuccess(result);
+    setIsQuickPayPreviewOpen(false);
+    setIsNewReceiptOpen(false);
+    // Bluetooth POS RawBT printer trigger
+    triggerBluetoothThermalPrint(result.payment, agency);
     onOpenReceiptModal(result.payment);
   };
 
@@ -698,22 +766,32 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => triggerDirectPrintReceipt(pay, agency, 'thermal')}
-                            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-blue-900 hover:bg-blue-800 rounded-lg transition shadow-xs"
-                            title="सीधा प्रिंट करें (Direct Thermal Print)"
+                            onClick={() => setPreviewReceiptItem(pay)}
+                            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition cursor-pointer"
+                            title="सारांश शीट देखें (Thermal Receipt Preview)"
                           >
-                            <Printer className="w-3.5 h-3.5" />
-                            <span>प्रिंट</span>
+                            <Eye className="w-3.5 h-3.5 text-teal-700" />
+                            <span>सारांश शीट देखें (Preview)</span>
                           </button>
 
                           <button
                             type="button"
-                            onClick={() => onOpenReceiptModal(pay)}
-                            className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
-                            title="रसीद देखें (View Receipt)"
+                            onClick={() => triggerDirectPrintReceipt(pay, agency, 'thermal')}
+                            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-blue-900 hover:bg-blue-800 rounded-lg transition shadow-xs cursor-pointer"
+                            title="सीधा प्रिंट करें (Direct Thermal Print)"
                           >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>देखें</span>
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>थर्मल प्रिंट</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => triggerBluetoothThermalPrint(pay, agency)}
+                            className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition cursor-pointer"
+                            title="Bluetooth POS (RawBT) से प्रिंट करें"
+                          >
+                            <Bluetooth className="w-3.5 h-3.5 text-blue-700" />
+                            <span>POS</span>
                           </button>
 
                           <button
@@ -842,30 +920,30 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
       {/* NEW PAYMENT RECEIPT MODAL                                 */}
       {/* ========================================================= */}
       {isNewReceiptOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="relative w-[92vw] sm:w-full max-w-md max-h-[85dvh] sm:max-h-[88vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="relative w-[96vw] sm:w-full max-w-xl max-h-[92dvh] sm:max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col">
             
-            <div className="bg-emerald-800 p-4 text-white flex items-center justify-between shrink-0">
+            <div className="bg-emerald-800 px-5 py-4 text-white flex items-center justify-between shrink-0">
               <div>
-                <h3 className="text-base font-bold">{t.collections.recordTitle}</h3>
+                <h3 className="text-base sm:text-lg font-bold">{t.collections.recordTitle}</h3>
                 <p className="text-xs text-emerald-200">रसीद काटें एवं खाता बही में तुरंत जमा करें</p>
               </div>
               <button
                 onClick={() => setIsNewReceiptOpen(false)}
-                className="p-1 text-emerald-200 hover:text-white rounded-lg transition"
+                className="p-1.5 text-emerald-200 hover:text-white rounded-lg transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1 overscroll-contain">
+            <div className="p-5 sm:p-6 space-y-4 text-xs sm:text-sm overflow-y-auto flex-1 overscroll-contain">
               
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">{t.collections.selectCustomer} *</label>
+                <label className="block font-semibold text-slate-700 mb-1.5">{t.collections.selectCustomer} *</label>
                 <select
                   value={selectedCustomerId}
                   onChange={(e) => handleCustomerChange(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none text-sm"
                 >
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -874,53 +952,66 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                   ))}
                 </select>
                 {selectedCustomer && (
-                  <div className="text-[11px] text-slate-500 mt-1">
+                  <div className="text-xs text-slate-500 mt-1.5">
                     वर्तमान बकाया राशि: <span className="font-bold text-rose-700">₹{selectedCustomer.currentBalance}</span>
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">{t.collections.amountLabel} *</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-2.5 font-bold text-slate-400 text-sm">₹</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">{t.collections.amountLabel} *</label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2.5 font-bold text-slate-400 text-base">₹</span>
+                    <input
+                      type="number"
+                      value={amountInput}
+                      onChange={(e) => setAmountInput(e.target.value)}
+                      placeholder="300"
+                      className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-lg font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">टिप्पणी / विवरण</label>
                   <input
-                    type="number"
-                    value={amountInput}
-                    onChange={(e) => setAmountInput(e.target.value)}
-                    placeholder="300"
-                    className="w-full pl-8 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-base font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="उदा. बकाया भुगतान"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none text-sm"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">{t.collections.methodLabel}</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="block font-semibold text-slate-700 mb-1.5">{t.collections.methodLabel}</label>
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('cash')}
-                    className={`p-2.5 rounded-xl border text-left transition ${
+                    className={`p-3 rounded-xl border text-left transition cursor-pointer ${
                       paymentMethod === 'cash'
-                        ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold'
-                        : 'bg-slate-50 border-slate-200 text-slate-700'
+                        ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100/70'
                     }`}
                   >
-                    <div>{t.collections.cash}</div>
-                    <div className="text-[10px] text-slate-500 font-normal">कलेक्टर को भौतिक नकद</div>
+                    <div className="text-xs sm:text-sm">{t.collections.cash}</div>
+                    <div className="text-[11px] text-slate-500 font-normal">कलेक्टर को भौतिक नकद</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('upi')}
-                    className={`p-2.5 rounded-xl border text-left transition ${
+                    className={`p-3 rounded-xl border text-left transition cursor-pointer ${
                       paymentMethod === 'upi'
-                        ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold'
-                        : 'bg-slate-50 border-slate-200 text-slate-700'
+                        ? 'bg-emerald-50 border-emerald-600 text-emerald-950 font-bold shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100/70'
                     }`}
                   >
-                    <div>{t.collections.upi}</div>
-                    <div className="text-[10px] text-slate-500 font-normal">GPay / PhonePe / QR</div>
+                    <div className="text-xs sm:text-sm">{t.collections.upi}</div>
+                    <div className="text-[11px] text-slate-500 font-normal">GPay / PhonePe / QR</div>
                   </button>
                 </div>
               </div>
@@ -943,45 +1034,137 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
                       value={txRef}
                       onChange={(e) => setTxRef(e.target.value)}
                       placeholder="उदा. 42890123990"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none font-mono"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none font-mono"
                     />
                   </div>
                 </div>
               )}
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">टिप्पणी / विवरण</label>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="उदा. बकाया भुगतान"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none"
-                />
-              </div>
+            </div>
 
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+            <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsQuickPayPreviewOpen(true)}
+                disabled={!parseFloat(amountInput) || parseFloat(amountInput) <= 0}
+                className="h-11 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-teal-300 border border-slate-800 text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-40 whitespace-nowrap shadow-2xs"
+              >
+                <Eye className="w-4 h-4 text-teal-400 shrink-0" />
+                <span>सारांश शीट देखें (Preview)</span>
+              </button>
+
+              <div className="grid grid-cols-[1fr_2fr] sm:flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsNewReceiptOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl font-medium text-slate-700 hover:bg-slate-50"
+                  className="h-11 px-4 border border-slate-300 bg-white hover:bg-slate-100 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 inline-flex items-center justify-center transition cursor-pointer whitespace-nowrap"
                 >
                   रद्द करें
                 </button>
                 <button
                   type="button"
                   onClick={handleSubmitPayment}
-                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-xs"
+                  className="h-11 px-5 bg-emerald-800 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-sm inline-flex items-center justify-center gap-2 transition cursor-pointer whitespace-nowrap"
                 >
-                  {t.collections.saveAndPrintReceipt}
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{t.collections.saveAndPrintReceipt}</span>
                 </button>
               </div>
-
             </div>
 
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* QUICK PAYMENT & RECEIPT THERMAL SUMMARY PREVIEW MODAL      */}
+      {/* ========================================================= */}
+      {(isQuickPayPreviewOpen && draftQuickPaymentRecord) || previewReceiptItem ? (
+        <div className="fixed inset-0 z-60 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <Printer className="w-4 h-4 text-teal-400" />
+                <div>
+                  <h3 className="text-sm font-bold">सारांश शीट एवं रसीद पूर्वावलोकन (Preview)</h3>
+                  <p className="text-[11px] text-slate-300">
+                    त्वरित वसूली (Quick Payment) • 58mm / 80mm थर्मल प्रिंटर
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsQuickPayPreviewOpen(false);
+                  setPreviewReceiptItem(null);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Thermal Receipt Paper Preview */}
+            <div className="p-5 bg-slate-100 overflow-y-auto flex-1 flex justify-center">
+              <div
+                className="bg-white shadow-md border border-slate-300 p-2.5 rounded-xs"
+                dangerouslySetInnerHTML={{
+                  __html: buildReceiptThermalSnippet(
+                    (previewReceiptItem || draftQuickPaymentRecord) as PaymentRecord,
+                    agency
+                  ),
+                }}
+              />
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if (previewReceiptItem) {
+                    triggerBluetoothThermalPrint(previewReceiptItem, agency);
+                  } else {
+                    handleSubmitAndBluetoothPrint();
+                  }
+                }}
+                className="h-10 sm:h-11 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 text-xs sm:text-sm font-bold inline-flex items-center justify-center gap-2 transition cursor-pointer whitespace-nowrap"
+              >
+                <Bluetooth className="w-4 h-4 text-blue-700 shrink-0" />
+                <span>Bluetooth POS (RawBT)</span>
+              </button>
+
+              <div className="grid grid-cols-[1fr_2fr] sm:flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsQuickPayPreviewOpen(false);
+                    setPreviewReceiptItem(null);
+                  }}
+                  className="h-10 sm:h-11 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition cursor-pointer whitespace-nowrap"
+                >
+                  बंद करें
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (previewReceiptItem) {
+                      triggerDirectPrintReceipt(previewReceiptItem, agency, 'thermal');
+                    } else {
+                      handleSubmitPayment();
+                    }
+                  }}
+                  className="h-10 sm:h-11 px-5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs sm:text-sm font-bold shadow-sm inline-flex items-center justify-center gap-2 transition cursor-pointer whitespace-nowrap"
+                >
+                  <Printer className="w-4 h-4 shrink-0" />
+                  <span>थर्मल प्रिंट करें</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* ========================================================= */}
       {/* CASH HANDOVER MODAL                                       */}

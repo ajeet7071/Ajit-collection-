@@ -54,6 +54,7 @@ export const RouteManagementModal: React.FC<RouteManagementModalProps> = ({
   const [collectionAgentId, setCollectionAgentId] = useState('agent_collector_1');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [routeToDelete, setRouteToDelete] = useState<DeliveryRoute | null>(null);
 
   if (!isOpen) return null;
 
@@ -133,17 +134,23 @@ export const RouteManagementModal: React.FC<RouteManagementModalProps> = ({
   const handleDelete = (route: DeliveryRoute) => {
     const assignedCount = customers.filter((c) => c.routeId === route.id).length;
     if (assignedCount > 0) {
-      alert(
+      setErrorMsg(
         `इस रूट (${route.nameHi}) पर ${assignedCount} ग्राहक जुड़े हुए हैं। पहले उन ग्राहकों को अन्य रूट पर ट्रांसफर करें।`
       );
+      setTimeout(() => setErrorMsg(''), 4500);
       return;
     }
 
-    if (confirm(`क्या आप रूट "${route.nameHi} (${route.code})" को हटाना चाहते हैं?`)) {
-      onDeleteRoute(route.id);
-      setSuccessMsg('रूट हटा दिया गया।');
-      setTimeout(() => setSuccessMsg(''), 2500);
-    }
+    setErrorMsg('');
+    setRouteToDelete(route);
+  };
+
+  const handleConfirmDeleteRoute = () => {
+    if (!routeToDelete) return;
+    onDeleteRoute(routeToDelete.id);
+    setRouteToDelete(null);
+    setSuccessMsg('रूट सफलतापूर्वक हटा दिया गया।');
+    setTimeout(() => setSuccessMsg(''), 2500);
   };
 
   const filteredRoutes = routes.filter((r) => {
@@ -195,6 +202,36 @@ export const RouteManagementModal: React.FC<RouteManagementModalProps> = ({
             <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl font-medium flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {routeToDelete && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 text-rose-900">
+                <Trash2 className="w-4 h-4 text-rose-600 shrink-0" />
+                <div>
+                  <div className="font-bold">
+                    क्या आप वाकई रूट "{routeToDelete.nameHi} ({routeToDelete.code})" को हटाना चाहते हैं?
+                  </div>
+                  <div className="text-[11px] text-rose-700">यह रूट सूची से स्थायी रूप से हट जाएगा।</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setRouteToDelete(null)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  रद्द करें
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteRoute}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold cursor-pointer"
+                >
+                  हाँ, हटाएं
+                </button>
+              </div>
             </div>
           )}
 

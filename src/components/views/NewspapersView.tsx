@@ -31,6 +31,8 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNp, setEditingNp] = useState<Newspaper | null>(null);
+  const [newspaperToDelete, setNewspaperToDelete] = useState<Newspaper | null>(null);
+  const [successMsg, setSuccessMsg] = useState('');
 
   // Form State
   const [name, setName] = useState('');
@@ -42,6 +44,11 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
   const [agencyPrice, setAgencyPrice] = useState('3.6');
   const [fixedMonthly, setFixedMonthly] = useState('150');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
+
+  const showToast = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
 
   const handleOpenAdd = () => {
     setEditingNp(null);
@@ -100,14 +107,17 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
 
     onSaveNewspaper(saved);
     setIsModalOpen(false);
+    showToast(editingNp ? `"${saved.nameHi}" की दरें अपडेट कर दी गईं।` : `"${saved.nameHi}" को सूची में जोड़ दिया गया।`);
   };
 
-  const handleDelete = (id: string, name: string) => {
-    if (confirm(`क्या आप वाकई "${name}" को अखबार सूची से हटाना चाहते हैं?`)) {
-      if (onDeleteNewspaper) {
-        onDeleteNewspaper(id);
-      }
+  const handleConfirmDelete = () => {
+    if (!newspaperToDelete) return;
+    if (onDeleteNewspaper) {
+      onDeleteNewspaper(newspaperToDelete.id);
+      showToast(`"${newspaperToDelete.nameHi}" को अखबार सूची से हटा दिया गया है।`);
     }
+    setNewspaperToDelete(null);
+    setIsModalOpen(false);
   };
 
   return (
@@ -123,13 +133,30 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={handleOpenAdd}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-xs whitespace-nowrap self-start md:self-auto"
+          className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-xs whitespace-nowrap self-start md:self-auto cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>नया अखबार जोड़ें (Add Newspaper)</span>
         </button>
       </div>
+
+      {successMsg && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessMsg('')}
+            className="text-emerald-600 hover:text-emerald-800 p-0.5 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Grid of Newspaper Cards with Quick Edit & Full Edit */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -149,10 +176,11 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <button
+                    type="button"
                     onClick={() => handleOpenEdit(np)}
-                    className="p-1.5 text-blue-900 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                    className="p-1.5 text-blue-900 hover:text-blue-950 bg-blue-50 hover:bg-blue-100 rounded-lg transition cursor-pointer"
                     title="पूरी जानकारी एडिट करें"
                   >
                     <Edit3 className="w-4 h-4" />
@@ -160,8 +188,12 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
 
                   {onDeleteNewspaper && (
                     <button
-                      onClick={() => handleDelete(np.id, np.nameHi)}
-                      className="p-1.5 text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-lg transition"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNewspaperToDelete(np);
+                      }}
+                      className="p-1.5 text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-lg transition cursor-pointer"
                       title="अखबार हटाएं"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -335,25 +367,102 @@ export const NewspapersView: React.FC<NewspapersViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  रद्द करें
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  className="px-5 py-2 bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded-xl shadow-xs"
-                >
-                  सुरक्षित करें
-                </button>
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
+                <div>
+                  {editingNp && onDeleteNewspaper && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        setNewspaperToDelete(editingNp);
+                      }}
+                      className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                      <span>हटाएं (Delete)</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 border border-slate-300 rounded-xl font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    रद्द करें
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    className="px-5 py-2 bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded-xl shadow-xs cursor-pointer"
+                  >
+                    सुरक्षित करें
+                  </button>
+                </div>
               </div>
 
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {newspaperToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="relative w-[92vw] sm:w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 space-y-4 my-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-900">
+                  क्या आप वाकई इस अखबार को हटाना चाहते हैं?
+                </h4>
+                <p className="text-xs text-slate-500">
+                  यह अखबार दर सूची से हट जाएगा।
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-slate-500">अखबार का नाम:</span>
+                <span className="font-bold text-slate-900">{newspaperToDelete.nameHi}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">English Name:</span>
+                <span className="font-medium text-slate-800">{newspaperToDelete.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">संस्करण (Edition):</span>
+                <span className="font-medium text-slate-700">{newspaperToDelete.edition}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1.5 border-t border-slate-200">
+                <span className="text-slate-500">ग्राहक बिक्री दर:</span>
+                <span className="font-mono font-bold text-sm text-blue-900">
+                  ₹{newspaperToDelete.retailPrice} / दिन
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setNewspaperToDelete(null)}
+                className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                रद्द करें (Cancel)
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>हाँ, अखबार हटाएं</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

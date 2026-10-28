@@ -4,6 +4,18 @@
  */
 
 import { PaymentRecord, Agency, Invoice } from '../types';
+import {
+  btPrinterManager,
+  buildEscPosRasterFromLines,
+  buildEscPosTextBytes,
+  buildEscPosAsciiCodeBytes,
+  buildPaymentReceiptStructuredLines,
+  buildCustomerBillStructuredLines,
+  buildPaymentReceiptAsciiLines,
+  buildCustomerBillAsciiLines,
+  formatAsciiLinesToPlainText,
+  dispatchCompanionAppBluetoothPrint,
+} from './bluetoothPrinterService';
 
 /**
  * Builds HTML snippet for thermal POS receipt slip (80mm / 58mm mobile thermal printers)
@@ -14,25 +26,34 @@ export function buildReceiptThermalSnippet(payment: PaymentRecord, agency: Agenc
     payment.paymentMethod === 'upi' ? 'UPI डिजिटल (ONLINE)' :
     payment.paymentMethod === 'bank_transfer' ? 'बैंक ट्रांसफर' : 'डिजिटल';
 
+  const logoSrc =
+    agency.logoUrl || '/assets/aistudio/file_0000000043f482118d45f9a7391eadfe_4733c263.png';
+  const fullAddress = [agency.address, agency.city, agency.state, agency.pincode]
+    .filter(Boolean)
+    .join(', ');
+
   return `
 <div class="thermal-receipt-slip" style="width: 74mm; max-width: 74mm; margin: 0 auto; padding: 2mm 1mm; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans Devanagari', monospace; font-size: 11px; line-height: 1.3; color: #000000; background: #ffffff;">
   
-  <div style="text-align: center;">
+  <div style="text-align: center; padding: 4px 2px 6px 2px; border-bottom: 2px solid #000000; margin-bottom: 6px;">
+    <div style="margin-bottom: 4px;">
+      <img src="${logoSrc}" alt="${agency.name || 'Agency Logo'}" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1.5px solid #000000; display: inline-block;" />
+    </div>
     <div style="font-size: 15px; font-weight: 900; margin-bottom: 2px; text-transform: uppercase;">
       ${agency.nameHi || 'अजीत न्यूजपेपर एजेंसी'}
     </div>
-    <div style="font-size: 11px; font-weight: 700; color: #222222; margin-bottom: 2px;">
+    <div style="font-size: 11px; font-weight: 700; color: #111111; margin-bottom: 2px;">
       ${agency.name || 'Ajeet Newspaper Agency'}
     </div>
-    <div style="font-size: 10px; color: #444444;">
-      ${agency.address}, ${agency.city}
+    <div style="font-size: 10px; color: #222222; line-height: 1.35;">
+      📍 ${fullAddress}
     </div>
     <div style="font-size: 10px; font-weight: bold; margin-top: 2px;">
       📞 संपर्क: +91 ${agency.mobile}
     </div>
+    ${agency.gstin ? `<div style="font-size: 9px; margin-top: 1px;">GSTIN: ${agency.gstin}</div>` : ''}
   </div>
 
-  <div style="border-top: 2px solid #000000; margin: 6px 0;"></div>
   <div style="text-align: center; font-weight: 900; font-size: 12px; letter-spacing: 0.5px;">
     भुगतान रसीद (PAYMENT RECEIPT)
   </div>
@@ -110,18 +131,27 @@ export function buildReceiptStandardSnippet(payment: PaymentRecord, agency: Agen
     payment.paymentMethod === 'upi' ? 'UPI डिजिटल (Online)' :
     payment.paymentMethod === 'bank_transfer' ? 'बैंक ट्रांसफर' : 'डिजिटल';
 
+  const logoSrc =
+    agency.logoUrl || '/assets/aistudio/file_0000000043f482118d45f9a7391eadfe_4733c263.png';
+  const fullAddress = [agency.address, agency.city, agency.state, agency.pincode]
+    .filter(Boolean)
+    .join(', ');
+
   return `
 <div style="border: 2px solid #0f172a; border-radius: 12px; padding: 24px; max-width: 650px; margin: 15px auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans Devanagari', sans-serif; font-size: 13px; color: #1e293b; background: #ffffff;">
   
   <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; text-align: center;">
+    <div style="margin-bottom: 8px;">
+      <img src="${logoSrc}" alt="${agency.name || 'Agency Logo'}" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid #f59e0b; display: inline-block;" />
+    </div>
     <div style="font-size: 24px; font-weight: 800; color: #1e3a8a; margin-bottom: 4px;">
       ${agency.nameHi}
     </div>
-    <div style="font-size: 14px; color: #475569;">
+    <div style="font-size: 14px; font-weight: 700; color: #334155;">
       ${agency.name}
     </div>
-    <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
-      ${agency.address}, ${agency.city} · फोन: +91 ${agency.mobile}
+    <div style="font-size: 12px; color: #475569; margin-top: 4px;">
+      📍 ${fullAddress} · 📞 फोन: +91 ${agency.mobile}
     </div>
   </div>
 
@@ -277,30 +307,76 @@ export function triggerDirectPrintReceipt(
 }
 
 /**
- * Triggers RawBT Bluetooth thermal printing on Android devices if RawBT is installed.
- * Falls back to standard direct mobile print.
+ * Directly prints the receipt to the mobile's connected Bluetooth thermal printer
+ * using Print (ASCII) Code (7-bit ASCII + ESC/POS Control Codes), Web Bluetooth GATT, or RawBT Base64 command.
  */
-export function triggerBluetoothThermalPrint(payment: PaymentRecord, agency: Agency): void {
-  const plainText = buildReceiptPlainText(payment, agency);
+export async function triggerBluetoothThermalPrint(
+  payment: PaymentRecord,
+  agency: Agency,
+  forceAsciiCode = false
+): Promise<boolean> {
+  const cfg = btPrinterManager.getConfig();
+  const useAscii = forceAsciiCode || cfg.mode === 'ascii_escpos' || cfg.useAsciiCode || !cfg.useRasterForHindi;
 
-  // Try RawBT Android intent
-  try {
-    const encoded = encodeURIComponent(plainText);
-    const rawBtUrl = `rawbt:data:text/plain;charset=utf-8,${encoded}`;
-    
-    // Check if on mobile device
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      window.location.href = rawBtUrl;
-      return;
-    }
-  } catch (e) {
-    console.warn('RawBT Bluetooth trigger notice:', e);
+  const asciiLines = buildPaymentReceiptAsciiLines(payment, agency, cfg);
+  const plainText = useAscii
+    ? formatAsciiLinesToPlainText(asciiLines, cfg, false)
+    : buildReceiptPlainText(payment, agency);
+
+  const escPosBytes = useAscii
+    ? buildEscPosAsciiCodeBytes(asciiLines, cfg)
+    : cfg.useRasterForHindi
+    ? buildEscPosRasterFromLines(buildPaymentReceiptStructuredLines(payment, agency), cfg)
+    : buildEscPosTextBytes(plainText, cfg);
+
+  // 1. If user chose companion app mode (RawBT ESC/POS Base64, Mate Bluetooth Print, or Custom Scheme)
+  if (
+    cfg.mode === 'rawbt_escpos' ||
+    cfg.mode === 'bt_print_scheme' ||
+    cfg.mode === 'custom_scheme'
+  ) {
+    return dispatchCompanionAppBluetoothPrint(escPosBytes, plainText, cfg);
   }
 
-  // Universal Fallback: System mobile print spooler
+  // 2. Try Direct Web Bluetooth GATT connection (already connected or silent auto-reconnect)
+  if (btPrinterManager.isConnected() || (await btPrinterManager.trySilentReconnect())) {
+    const sent = await btPrinterManager.sendRawBytesToConnectedPrinter(escPosBytes);
+    if (sent) return true;
+  }
+
+  // 3. If Web Bluetooth is supported, prompt connection for ascii_escpos / web_bluetooth / auto_smart
+  if (
+    btPrinterManager.isWebBluetoothSupported() &&
+    (cfg.mode === 'ascii_escpos' || cfg.mode === 'web_bluetooth' || cfg.mode === 'auto_smart' || forceAsciiCode)
+  ) {
+    const res = await btPrinterManager.requestAndConnectPrinter();
+    if (res.success) {
+      const sent = await btPrinterManager.sendRawBytesToConnectedPrinter(escPosBytes);
+      if (sent) return true;
+    }
+  }
+
+  // 4. On mobile (Android/iOS), dispatch companion app ESC/POS ASCII Base64 / scheme
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    return dispatchCompanionAppBluetoothPrint(escPosBytes, plainText, cfg);
+  }
+
+  // 5. Universal Fallback: System mobile print spooler
   triggerDirectPrintReceipt(payment, agency, 'thermal');
+  return true;
 }
+
+/**
+ * Dedicated helper to print receipt strictly in Print (ASCII) Code mode via Bluetooth
+ */
+export async function triggerBluetoothAsciiPrintReceipt(
+  payment: PaymentRecord,
+  agency: Agency
+): Promise<boolean> {
+  return triggerBluetoothThermalPrint(payment, agency, true);
+}
+
 
 /**
  * Builds HTML snippet for customer monthly bill formatted for thermal POS slip (58mm / 80mm)
@@ -582,28 +658,420 @@ export function triggerPrintCustomerThermalBill(invoice: Invoice, agency: Agency
 export const printCustomerThermalBill = triggerPrintCustomerThermalBill;
 
 /**
- * Triggers RawBT Bluetooth thermal printing on Android devices if RawBT is installed for customer bills.
- * Falls back to standard direct thermal mobile print.
+ * Directly prints the customer monthly bill to the connected Bluetooth thermal printer
+ * using Print (ASCII) Code (7-bit ASCII + ESC/POS Control Codes), Web Bluetooth GATT, or RawBT Base64 command.
  */
-export function triggerBluetoothCustomerThermalBill(invoice: Invoice, agency: Agency): void {
-  const plainText = buildCustomerBillPlainText(invoice, agency);
+export async function triggerBluetoothCustomerThermalBill(
+  invoice: Invoice,
+  agency: Agency,
+  forceAsciiCode = false
+): Promise<boolean> {
+  const cfg = btPrinterManager.getConfig();
+  const useAscii = forceAsciiCode || cfg.mode === 'ascii_escpos' || cfg.useAsciiCode || !cfg.useRasterForHindi;
 
-  // Try RawBT Android intent
-  try {
-    const encoded = encodeURIComponent(plainText);
-    const rawBtUrl = `rawbt:data:text/plain;charset=utf-8,${encoded}`;
-    
-    // Check if on mobile device
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      window.location.href = rawBtUrl;
-      return;
-    }
-  } catch (e) {
-    console.warn('RawBT Bluetooth bill print trigger notice:', e);
+  const asciiLines = buildCustomerBillAsciiLines(invoice, agency, cfg);
+  const plainText = useAscii
+    ? formatAsciiLinesToPlainText(asciiLines, cfg, false)
+    : buildCustomerBillPlainText(invoice, agency);
+
+  const escPosBytes = useAscii
+    ? buildEscPosAsciiCodeBytes(asciiLines, cfg)
+    : cfg.useRasterForHindi
+    ? buildEscPosRasterFromLines(buildCustomerBillStructuredLines(invoice, agency), cfg)
+    : buildEscPosTextBytes(plainText, cfg);
+
+  if (
+    cfg.mode === 'rawbt_escpos' ||
+    cfg.mode === 'bt_print_scheme' ||
+    cfg.mode === 'custom_scheme'
+  ) {
+    return dispatchCompanionAppBluetoothPrint(escPosBytes, plainText, cfg);
   }
 
-  // Universal Fallback: System mobile print spooler with thermal styles
+  if (btPrinterManager.isConnected() || (await btPrinterManager.trySilentReconnect())) {
+    const sent = await btPrinterManager.sendRawBytesToConnectedPrinter(escPosBytes);
+    if (sent) return true;
+  }
+
+  if (btPrinterManager.isWebBluetoothSupported()) {
+    const res = await btPrinterManager.requestAndConnectPrinter();
+    if (res.success) {
+      const sent = await btPrinterManager.sendRawBytesToConnectedPrinter(escPosBytes);
+      if (sent) return true;
+    }
+  }
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    return dispatchCompanionAppBluetoothPrint(escPosBytes, plainText, cfg);
+  }
+
   triggerPrintCustomerThermalBill(invoice, agency);
+  return true;
 }
 
+/**
+ * Dedicated helper to print customer monthly bill strictly in Print (ASCII) Code mode via Bluetooth
+ */
+export async function triggerBluetoothAsciiPrintBill(
+  invoice: Invoice,
+  agency: Agency
+): Promise<boolean> {
+  return triggerBluetoothCustomerThermalBill(invoice, agency, true);
+}
+
+
+function escapeHtml(value: string | number | undefined | null): string {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Generates an inline-styled HTML thermal summary sheet for multiple selected pending invoices.
+ * Optimized for 58mm / 80mm thermal receipt printers (76mm width, crisp black & white).
+ */
+export function buildBulkPendingInvoicesThermalSnippet(
+  invoices: Invoice[],
+  agency: Agency,
+  billingMonth?: string
+): string {
+  const pendingInvoices = invoices.filter((inv) => inv.status !== 'paid');
+  const printTime = new Date().toLocaleString('hi-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const totalCurrentBilled = pendingInvoices.reduce((sum, inv) => sum + inv.subtotal, 0);
+  const totalPrevBalance = pendingInvoices.reduce((sum, inv) => sum + inv.previousBalance, 0);
+  const totalPaidPartial = pendingInvoices.reduce((sum, inv) => sum + inv.amountPaid, 0);
+  const totalNetPending = pendingInvoices.reduce(
+    (sum, inv) => sum + (inv.remainingBalance > 0 ? inv.remainingBalance : inv.totalPayable - inv.amountPaid),
+    0
+  );
+
+  const rowsHtml = pendingInvoices
+    .map((inv, idx) => {
+      const pendingAmt = inv.remainingBalance > 0 ? inv.remainingBalance : inv.totalPayable - inv.amountPaid;
+      const statusTag = inv.status === 'partial' ? 'आंशिक' : 'अदत्त';
+      return `
+        <tr>
+          <td style="padding: 3px 0; border-bottom: 1px dashed #666; vertical-align: top; width: 16px; font-weight: 700;">
+            ${idx + 1}.
+          </td>
+          <td style="padding: 3px 2px; border-bottom: 1px dashed #666; vertical-align: top;">
+            <div style="font-weight: 800; font-size: 8.5pt; color: #000; line-height: 1.15;">
+              ${escapeHtml(inv.customerName)}
+            </div>
+            <div style="font-size: 7pt; color: #222; margin-top: 1px;">
+              #${escapeHtml(inv.invoiceNumber)} | मो:${escapeHtml(inv.customerMobile)} (${statusTag})
+            </div>
+            <div style="font-size: 7pt; color: #333; margin-top: 1px;">
+              माह: ₹${inv.subtotal} + पिछला: ₹${inv.previousBalance}${inv.amountPaid > 0 ? ` - जमा: ₹${inv.amountPaid}` : ''}
+            </div>
+          </td>
+          <td style="padding: 3px 0; border-bottom: 1px dashed #666; text-align: right; vertical-align: top; white-space: nowrap;">
+            <div style="font-weight: 900; font-size: 9pt; color: #000;">₹${pendingAmt}</div>
+            <div style="font-size: 7pt; color: #333; margin-top: 2px;">[ &nbsp; ] वसूली</div>
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  return `
+    <div class="thermal-sheet" style="
+      width: 76mm;
+      max-width: 76mm;
+      margin: 0 auto;
+      padding: 2mm 1.5mm;
+      font-family: 'JetBrains Mono', 'Noto Sans Devanagari', monospace;
+      font-size: 8.5pt;
+      line-height: 1.25;
+      color: #000000;
+      background: #ffffff;
+      box-sizing: border-box;
+    ">
+      <!-- Agency Header -->
+      <div style="text-align: center; border-bottom: 1.5px dashed #000; padding-bottom: 5px; margin-bottom: 5px;">
+        <div style="font-size: 11pt; font-weight: 800; letter-spacing: -0.2px; text-transform: uppercase;">
+          ${escapeHtml(agency.nameHi || agency.name)}
+        </div>
+        <div style="font-size: 7.5pt; margin-top: 1px;">
+          ${escapeHtml(agency.address)}${agency.city ? `, ${escapeHtml(agency.city)}` : ''}
+        </div>
+        <div style="font-size: 7.5pt; font-weight: 700; margin-top: 1px;">
+          मो.: +91 ${escapeHtml(agency.mobile)}
+        </div>
+        <div style="
+          display: inline-block;
+          margin-top: 4px;
+          padding: 2px 6px;
+          border: 1px solid #000;
+          font-size: 8pt;
+          font-weight: 800;
+          letter-spacing: 0.3px;
+        ">
+          बकाया बिल सारांश शीट (BULK PENDING SUMMARY)
+        </div>
+      </div>
+
+      <!-- Meta Details -->
+      <div style="border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 5px; font-size: 7.5pt;">
+        <div style="display: flex; justify-content: space-between;">
+          <span>बिलिंग माह: <strong>${escapeHtml(billingMonth || 'सभी माह')}</strong></span>
+          <span>कुल बिल: <strong>${pendingInvoices.length}</strong></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 2px;">
+          <span>प्रिंट समय:</span>
+          <span>${escapeHtml(printTime)}</span>
+        </div>
+      </div>
+
+      <!-- Pending Invoices Table -->
+      <table style="width: 100%; border-collapse: collapse; font-size: 7.8pt; margin-bottom: 6px;">
+        <thead>
+          <tr style="border-bottom: 1.2px solid #000;">
+            <th style="text-align: left; padding: 2px 0; width: 16px;">क्र.</th>
+            <th style="text-align: left; padding: 2px 2px;">ग्राहक / बिल विवरण</th>
+            <th style="text-align: right; padding: 2px 0;">शेष बकाया</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+
+      <!-- Grand Totals Box -->
+      <div style="border-top: 1.5px solid #000; border-bottom: 1.5px solid #000; padding: 4px 0; margin-bottom: 6px; font-size: 8pt;">
+        <div style="display: flex; justify-content: space-between;">
+          <span>चयनित बकाया ग्राहक:</span>
+          <strong>${pendingInvoices.length} बिल</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 1px;">
+          <span>माह का कुल बिल योग:</span>
+          <span>₹${totalCurrentBilled.toLocaleString('en-IN')}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 1px;">
+          <span>कुल पिछला बकाया योग:</span>
+          <span>₹${totalPrevBalance.toLocaleString('en-IN')}</span>
+        </div>
+        ${
+          totalPaidPartial > 0
+            ? `<div style="display: flex; justify-content: space-between; margin-top: 1px;">
+                <span>आंशिक प्राप्त राशि (-):</span>
+                <span>- ₹${totalPaidPartial.toLocaleString('en-IN')}</span>
+              </div>`
+            : ''
+        }
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          border-top: 1px dashed #000;
+          margin-top: 3px;
+          padding-top: 3px;
+          font-size: 10pt;
+          font-weight: 900;
+        ">
+          <span>कुल वसूली योग्य (TOTAL DUE):</span>
+          <span>₹${totalNetPending.toLocaleString('en-IN')}</span>
+        </div>
+      </div>
+
+      <!-- Field Collection Summary Fill-in & Sign -->
+      <div style="font-size: 7.5pt; margin-top: 4px; padding-top: 2px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span>आज कुल प्राप्त वसूली: ₹................</span>
+          <span>शेष: ₹................</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px;">
+          <span>हॉकर / संग्राहक हस्ताक्षर</span>
+          <span style="font-weight: 700;">अधिकृत: ${escapeHtml(agency.ownerName)}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Generates plain text for 32-column ESC/POS Bluetooth thermal printers for bulk pending invoices.
+ */
+export function buildBulkPendingInvoicesPlainText(
+  invoices: Invoice[],
+  agency: Agency,
+  billingMonth?: string
+): string {
+  const pendingInvoices = invoices.filter((inv) => inv.status !== 'paid');
+  const divider = '--------------------------------';
+  const doubleDivider = '================================';
+
+  const totalCurrentBilled = pendingInvoices.reduce((sum, inv) => sum + inv.subtotal, 0);
+  const totalPrevBalance = pendingInvoices.reduce((sum, inv) => sum + inv.previousBalance, 0);
+  const totalNetPending = pendingInvoices.reduce(
+    (sum, inv) => sum + (inv.remainingBalance > 0 ? inv.remainingBalance : inv.totalPayable - inv.amountPaid),
+    0
+  );
+
+  const lines: string[] = [
+    doubleDivider,
+    `  ${agency.nameHi || agency.name}`,
+    `  मो.: +91 ${agency.mobile}`,
+    divider,
+    `   बकाया बिल सारांश (BULK SUMMARY)`,
+    `माह: ${billingMonth || 'सभी'} | कुल बिल: ${pendingInvoices.length}`,
+    `दिनांक: ${new Date().toLocaleDateString('hi-IN')}`,
+    divider,
+    `क्र. ग्राहक / मो.           बकाया`,
+    divider,
+  ];
+
+  pendingInvoices.forEach((inv, idx) => {
+    const pendingAmt = inv.remainingBalance > 0 ? inv.remainingBalance : inv.totalPayable - inv.amountPaid;
+    lines.push(`${idx + 1}. ${inv.customerName} (Rs.${pendingAmt})`);
+    lines.push(`   #${inv.invoiceNumber} | मो:${inv.customerMobile}`);
+    lines.push(`   माह:Rs.${inv.subtotal} + पिछला:Rs.${inv.previousBalance} [ ]`);
+  });
+
+  lines.push(
+    divider,
+    `कुल चयनित बिल : ${pendingInvoices.length}`,
+    `माह बिल योग    : Rs. ${totalCurrentBilled}`,
+    `पिछला बकाया योग : Rs. ${totalPrevBalance}`,
+    doubleDivider,
+    `कुल वसूली बकाया : Rs. ${totalNetPending}`,
+    doubleDivider,
+    `आज प्राप्त वसूली : Rs. ..........`,
+    `अधिकृत: ${agency.ownerName}`,
+    `\n\n`
+  );
+
+  return lines.join('\n');
+}
+
+/**
+ * Triggers direct thermal printing of the bulk pending invoices summary sheet.
+ */
+export function triggerPrintBulkPendingThermalSummary(
+  invoices: Invoice[],
+  agency: Agency,
+  billingMonth?: string
+): void {
+  const pendingInvoices = invoices.filter((inv) => inv.status !== 'paid');
+  if (pendingInvoices.length === 0) return;
+
+  let container = document.getElementById('direct-mobile-receipt-print-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'direct-mobile-receipt-print-container';
+    document.body.appendChild(container);
+  }
+
+  container.innerHTML = buildBulkPendingInvoicesThermalSnippet(pendingInvoices, agency, billingMonth);
+
+  document.body.classList.add('direct-receipt-printing');
+  document.body.classList.add('thermal-print-active');
+
+  try {
+    window.focus();
+    window.print();
+  } catch (err) {
+    console.warn('Bulk thermal summary print notice:', err);
+  } finally {
+    const handleAfterPrint = () => {
+      document.body.classList.remove('direct-receipt-printing');
+      document.body.classList.remove('thermal-print-active');
+      if (container) {
+        container.innerHTML = '';
+      }
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+
+    window.addEventListener('afterprint', handleAfterPrint);
+    setTimeout(handleAfterPrint, 2500);
+  }
+}
+
+/**
+ * Directly prints the bulk pending summary sheet to the connected Bluetooth thermal printer.
+ */
+export async function triggerBluetoothBulkPendingThermalSummary(
+  invoices: Invoice[],
+  agency: Agency,
+  billingMonth?: string
+): Promise<boolean> {
+  const pendingInvoices = invoices.filter((inv) => inv.status !== 'paid');
+  if (pendingInvoices.length === 0) return false;
+
+  const cfg = btPrinterManager.getConfig();
+  const plainText = buildBulkPendingInvoicesPlainText(pendingInvoices, agency, billingMonth);
+  const structuredLines = plainText.split('\n').map((line) => ({
+    text: line,
+    align: (line.startsWith('  ') ? 'center' : 'left') as 'left' | 'center',
+    bold: line.includes('===') || line.includes('कुल वसूली बकाया'),
+    size: 'sm' as const,
+  }));
+  const escPosBytes = cfg.useRasterForHindi
+    ? buildEscPosRasterFromLines(structuredLines, cfg)
+    : buildEscPosTextBytes(plainText, cfg);
+
+  if (
+    cfg.mode === 'rawbt_escpos' ||
+    cfg.mode === 'bt_print_scheme' ||
+    cfg.mode === 'custom_scheme'
+  ) {
+    return dispatchCompanionAppBluetoothPrint(escPosBytes, plainText, cfg);
+  }
+
+  if (btPrinterManager.isConnected() || (await btPrinterManager.trySilentReconnect())) {
+    const sent = await btPrinterManager.sendRawBytesToConnectedPrinter(escPosBytes);
+    if (sent) return true;
+  }
+
+  if (btPrinterManager.isWebBluetoothSupported()) {
+    const res = await btPrinterManager.requestAndConnectPrinter();
+    if (res.success) {
+      const sent = await btPrinterManager.sendRawBytesToConnectedPrinter(escPosBytes);
+      if (sent) return true;
+    }
+  }
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    return dispatchCompanionAppBluetoothPrint(escPosBytes, plainText, cfg);
+  }
+
+  triggerPrintBulkPendingThermalSummary(pendingInvoices, agency, billingMonth);
+  return true;
+}
+
+/**
+ * Prints a test slip on the connected Bluetooth printer to verify instant 1-click printing.
+ */
+export async function triggerTestBluetoothPrint(agency: Agency): Promise<boolean> {
+  const samplePayment: PaymentRecord = {
+    id: 'test_bt_01',
+    agencyId: agency.id,
+    receiptNumber: 'TEST-BT-001',
+    customerId: 'cust_test',
+    customerName: 'टेस्ट ग्राहक (Bluetooth Test)',
+    customerMobile: agency.mobile || '9660527071',
+    amount: 250,
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'cash',
+    isAdvance: false,
+    collectedByAgentId: 'agent_1',
+    collectedByAgentName: agency.ownerName || 'Ajeet Kumar',
+    handoverStatus: 'in_hand',
+    notes: 'ब्लूटूथ प्रिंटर कनेक्शन सफल! (1-Click Auto Print Ready)',
+    createdAt: new Date().toISOString(),
+  };
+
+  return await triggerBluetoothThermalPrint(samplePayment, agency);
+}
